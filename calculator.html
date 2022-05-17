@@ -1,0 +1,205 @@
+<!doctype html>
+<html>
+  <head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <!-- Bootstrap CSS -->
+   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <style>
+      canvas { background-color : #eee; }
+    </style>
+
+  </head>
+    <body>
+    <label>Player PTI:</label><input type="number" id="ptiPlayer" value=29 onchange=updateExpected()>
+     <br>
+    <label>Partner PTI:</label><input type="number" id="ptiPartner" value=24  onchange=updateExpected()>
+     <br>
+    <label>Opp PTI:</label><input type="number" id="ptiOpp1" value=21 onchange=updateExpected()>
+     <br>
+    <label>Opp PTI:</label><input type="number" id="ptiOpp2" value=23 onchange=updateExpected()>
+    <br>
+    <label id="lblExpected" for="expected">Expected:</label>
+
+    <canvas id="chartJSContainer" width="300" height="270"></canvas>
+    <!-- Optional JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.3.0/Chart.js">
+    <script src="pti_match_result_scenarios.js">
+    <!-- jQuery first, then Popper.js, then Bootstrap JS -->
+
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.14.7/dist/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+    <script>
+var ctx = document.getElementById('chartJSContainer').getContext('2d');
+var pageChart;
+document.getElementById("lblExpected").innerText = `Expected ${expected}`;
+
+objToPoint = function(ps) {
+  var adjust = PTISpreadScale * 2.8 * (expected - ps.eloActual)
+
+  return ({
+    x: ps.winnerGames,
+    y: adjust,
+    name: ps.possibleScores,
+    label: ps.possibleScores
+  })
+}
+
+
+var twoset_data = twosets.map(objToPoint)
+var threeset_data = threesets.map(objToPoint)
+var twoset_loss = twosetloss.map(objToPoint)
+var threeset_loss = threesetloss.map(objToPoint)
+
+
+function updateChart() {
+  document.getElementById("lblExpected").innerText = `Expected ${(100*expected).toFixed(2)} %`;
+
+  twoset_data = twosets.map(objToPoint)
+  threeset_data = threesets.map(objToPoint)
+  twoset_loss = twosetloss.map(objToPoint)
+  threeset_loss = threesetloss.map(objToPoint)
+
+
+  //console.log(threeset_data)
+
+  var options = {
+    type: 'scatter',
+    data: {
+      datasets: [{
+          borderColor: "blue",
+          backgroundColor: "blue",
+          label: '2-Set Win',
+          data: twoset_data,
+          borderWidth: 1,
+          showLine: false
+        }, {
+          borderColor: "green",
+          backgroundColor: "green",
+          label: '3-Set Win',
+          data: threeset_data,
+          borderWidth: 1,
+          showLine: false
+        }, {
+          borderColor: "red",
+          backgroundColor: "red",
+          label: '2-Set Loss',
+          data: twoset_loss,
+          borderWidth: 1,
+          showLine: false
+        },
+        {
+          borderColor: "orange",
+          backgroundColor: "orange",
+          label: '3-Set Loss',
+          data: threeset_loss,
+          borderWidth: 1,
+          showLine: false
+        }
+
+      ]
+    },
+    options: {
+      title: {
+        display: true,
+        text: "PTI Movement",
+        fontSize: 14,
+      },
+      legend: {
+        display: true,
+        position: 'bottom'
+      },
+      scales: {
+        xAxes: [{
+          scaleLabel: {
+            display: true,
+            labelString: "Games Won"
+          },
+          gridLines: {
+            display: true,
+          },
+          ticks: {
+            callback: function(value, index, values) {
+              //console.log("ticks");
+              return value.toLocaleString();
+            }
+          }
+        }],
+        yAxes: [{
+          ticks: {
+            min: -3,
+            max: 3
+          },
+          scaleLabel: {
+            display: true,
+            labelString: "Adjustment"
+          },
+          gridLines: {
+            display: true,
+          }
+        }]
+      },
+      tooltips: {
+        callbacks: {
+          title: function(tooltipItem, all) {
+            //console.log("Tooltips");
+            return [
+              all.datasets[tooltipItem[0].datasetIndex].label /*data[tooltipItem[0].index].name */ ,
+            ]
+          }
+
+        }
+      }
+    }
+
+  };
+
+
+
+  if (typeof pageChart !== 'undefined') {
+    console.log("Page Chart Update");
+    pageChart.data.datasets[0].data = twoset_data;
+    pageChart.data.datasets[1].data = threeset_data;
+    pageChart.data.datasets[2].data = twoset_loss;
+    pageChart.data.datasets[3].data = threeset_loss;
+
+    pageChart.update();
+  } else {
+    console.log("Page Chart Creation");
+    pageChart = new Chart(ctx, options);
+  }
+}
+
+updateChart(pageChart);
+
+function updateExpected() {
+  var playerPTI = parseFloat(document.getElementById('ptiPlayer').value);
+  var partnerPTI = parseFloat(document.getElementById('ptiPartner').value);
+  var opp1PTI = parseFloat(document.getElementById('ptiOpp1').value);
+  var opp2PTI = parseFloat(document.getElementById('ptiOpp2').value);
+
+  team1 = playerPTI + partnerPTI;
+  team2 = opp1PTI + opp2PTI;
+
+  PTISpread = team2 - team1;
+
+
+  expected = 1 - (1 / (1 + 10 ** ((team2 - team1) / 24)))
+  console.log(team1);
+  console.log(team2);
+  console.log(expected);
+  dExp = expected.toFixed(4);
+  document.getElementById("lblExpected").innerText = `Expected ${dExp}`;
+
+  updateChart()
+
+}
+updateExpected();
+      
+    </script>
+
+  </body>
+    </html>
