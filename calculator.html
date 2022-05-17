@@ -25,28 +25,28 @@
         <div class="input-group-prepend">
           <span class="input-group-text" id="basic-addon1">Player PTI:</span>
         </div>
-        <input id="ptiPlayer" type="number" class="form-control pti" placeholder="0" aria-label="Player PTI" aria-describedby="basic-addon1">
+        <input id="ptiPlayer" type="number" class="form-control pti" value=0 placeholder="0" aria-label="Player PTI" aria-describedby="basic-addon1">
       </div>
 
       <div class="input-group mb-3">
         <div class="input-group-prepend">
           <span class="input-group-text" id="basic-addon1">Partner PTI:</span>
         </div>
-        <input  id="ptiPartner" type="number" class="form-control pti" placeholder="0" aria-label="Partner PTI" aria-describedby="basic-addon1">
+        <input  id="ptiPartner" type="number" class="form-control pti" value=0  placeholder="0" aria-label="Partner PTI" aria-describedby="basic-addon1">
       </div>
 
       <div class="input-group mb-3">
         <div class="input-group-prepend">
           <span class="input-group-text" id="basic-addon1">Opp PTI:</span>
         </div>
-        <input id="ptiOpp1" type="number" class="form-control pti" placeholder="0" aria-label="First Opponent PTI" aria-describedby="basic-addon1">
+        <input id="ptiOpp1" type="number" class="form-control pti" value=0 placeholder="0" aria-label="First Opponent PTI" aria-describedby="basic-addon1">
       </div>
 
       <div class="input-group mb-3">
         <div class="input-group-prepend">
           <span class="input-group-text" id="basic-addon1">Opp PTI:</span>
         </div>
-        <input id="ptiOpp2" type="number" class="form-control pti" placeholder="0" aria-label="Second Opponent PTI" aria-describedby="basic-addon1">
+        <input id="ptiOpp2" type="number" class="form-control pti" value=0  placeholder="0" aria-label="Second Opponent PTI" aria-describedby="basic-addon1">
       </div>
     <br>
     </div>
@@ -90,17 +90,17 @@ function savePTI() {
     storage.setItem('playerPTI',$('#ptiPlayer').val());
     storage.setItem('partnerPTI',$('#ptiPartner').val());
     storage.setItem('opp1PTI',$('#ptiOpp1').val());
-    storage.setItem('opp1PTI',$('#ptiOpp2').val());
+    storage.setItem('opp2PTI',$('#ptiOpp2').val());
   }
 
 }
 
 function restorePTI() {
   if(storage) {
-    $('#ptiPlayer').val(storage.getItem('playerPTI'));
-    $('#ptiPartner').val(storage.getItem('partnerPTI'));
-    $('#ptiOpp1').val(storage.getItem('opp1PTI'));
-    $('#ptiOpp2').val(storage.getItem('opp1PTI'));
+    $('#ptiPlayer').val(parseFloat(storage.getItem('playerPTI')) || 0);
+    $('#ptiPartner').val(parseFloat(storage.getItem('partnerPTI')) || 0);
+    $('#ptiOpp1').val(parseFloat(storage.getItem('opp1PTI')) || 0);
+    $('#ptiOpp2').val(parseFloat(storage.getItem('opp2PTI')) || 0);
   }
 
 }
