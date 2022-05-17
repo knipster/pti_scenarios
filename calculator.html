@@ -51,7 +51,9 @@
     <br>
     </div>
     <div class="container" id="intermediate_results">
-    <label id="lblExpected" for="expected">Expected:</label>
+    <h5><span class="label label-default" id="lblExpected" for="expected">Expected:</span></h5>
+    <h5><span class="label label-default" id="lblSpread" for="expected">Spread:</span></h5>
+    <h5><span class="label label-default" id="lblSpreadScale" for="expected">Scale:</span></h5>
   </div>
   <div class="container" id="chart">
     <canvas id="chartJSContainer" width="300" height="270"></canvas>
@@ -110,12 +112,24 @@ var expected = 0.5377;
 var PTISpread = 0;
 var PTISpreadScale = 1;
 
+function pti_expected() {
+  return 1 - (1 / (1 + 10 ** ((PTISpread) / 24)))
+}
+
+function pti_adjustment(expected_result,actual_result) {
+  if (((expected_result>.5) && (actual_result < .5)) || ((expected_result<.5) && (actual_result > .5)))
+    return 2.8* (expected_result-actual_result);
+  else
+    return PTISpreadScale*2.8* (expected_result-actual_result);
+}
+
+
 var ctx = document.getElementById('chartJSContainer').getContext('2d');
 var pageChart;
 document.getElementById("lblExpected").innerText = `Expected ${expected}`;
 
 objToPoint = function(ps) {
-  var adjust = PTISpreadScale * 2.8 * (expected - ps.eloActual)
+  var adjust = pti_adjustment(expected,ps.eloActual);
 
   return ({
     x: ps.winnerGames,
@@ -266,16 +280,27 @@ function updateExpected() {
   team2 = opp1PTI + opp2PTI;
 
   PTISpread = team2 - team1;
+  if(Math.abs(PTISpread)>=21) {
+    PTISpreadScale=0;
+  }
+  else if (Math.abs(PTISpread)>17){
+    PTISpreadScale=(21-Math.abs(PTISpread))/4;
+  } else {
+    PTISpreadScale=1;
+  }
 
+  
 
-  expected = 1 - (1 / (1 + 10 ** ((team2 - team1) / 24)))
+  expected = pti_expected();
   console.log(team1);
   console.log(team2);
   console.log(expected);
   dExp = expected.toFixed(4);
   document.getElementById("lblExpected").innerText = `Expected ${dExp}`;
+  document.getElementById("lblSpread").innerText = `Spread ${PTISpread}`;
+  document.getElementById("lblSpreadScale").innerText = `Spread Scale ${PTISpreadScale}`;
 
-  updateChart()
+  updateChart();
 
 }
 updateExpected();
