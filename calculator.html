@@ -7,32 +7,109 @@
 
     <!-- Bootstrap CSS -->
    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
-    <style>
-      canvas { background-color : #eee; }
-    </style>
+   <link rel="stylesheet" href="calculator.css">
 
   </head>
     <body>
-    <label>Player PTI:</label><input type="number" id="ptiPlayer" value=29 onchange=updateExpected()>
-     <br>
-    <label>Partner PTI:</label><input type="number" id="ptiPartner" value=24  onchange=updateExpected()>
-     <br>
-    <label>Opp PTI:</label><input type="number" id="ptiOpp1" value=21 onchange=updateExpected()>
-     <br>
-    <label>Opp PTI:</label><input type="number" id="ptiOpp2" value=23 onchange=updateExpected()>
-    <br>
-    <label id="lblExpected" for="expected">Expected:</label>
+      <div class="cover-container d-flex h-100 p-3 mx-auto flex-column">
+        <header class="masthead mb-auto">
+          <div class="inner">
+            <h3 class="masthead-brand">PTI Movement Scenarios</h3>
+          </div>
+        </header>
 
+
+    <div class="container" id="inputs">
+
+      <div class="input-group mb-3">
+        <div class="input-group-prepend">
+          <span class="input-group-text" id="basic-addon1">Player PTI:</span>
+        </div>
+        <input id="ptiPlayer" type="number" class="form-control pti" placeholder="0" aria-label="Player PTI" aria-describedby="basic-addon1">
+      </div>
+
+      <div class="input-group mb-3">
+        <div class="input-group-prepend">
+          <span class="input-group-text" id="basic-addon1">Partner PTI:</span>
+        </div>
+        <input  id="ptiPartner" type="number" class="form-control pti" placeholder="0" aria-label="Partner PTI" aria-describedby="basic-addon1">
+      </div>
+
+      <div class="input-group mb-3">
+        <div class="input-group-prepend">
+          <span class="input-group-text" id="basic-addon1">Opp PTI:</span>
+        </div>
+        <input id="ptiOpp1" type="number" class="form-control pti" placeholder="0" aria-label="First Opponent PTI" aria-describedby="basic-addon1">
+      </div>
+
+      <div class="input-group mb-3">
+        <div class="input-group-prepend">
+          <span class="input-group-text" id="basic-addon1">Opp PTI:</span>
+        </div>
+        <input id="ptiOpp2" type="number" class="form-control pti" placeholder="0" aria-label="Second Opponent PTI" aria-describedby="basic-addon1">
+      </div>
+    <br>
+    </div>
+    <div class="container" id="intermediate_results">
+    <label id="lblExpected" for="expected">Expected:</label>
+  </div>
+  <div class="container" id="chart">
     <canvas id="chartJSContainer" width="300" height="270"></canvas>
+  </div>
     <!-- Optional JavaScript -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.3.0/Chart.js">
-    <script src="pti_match_result_scenarios.js">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.3.0/Chart.js"></script>
+    <script src="pti_match_result_scenarios.js"></script>
     <!-- jQuery first, then Popper.js, then Bootstrap JS -->
 
     <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/popper.js@1.14.7/dist/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
     <script>
+/**
+ * Feature detect + local reference for simple use of local storage
+ * Use like:
+ * if (storage) {
+ *    storage.setItem('key', 'value');
+ *    storage.getItem('key');
+ * }
+ *
+ */
+ var storage;
+var fail;
+var uid;
+try {
+  uid = new Date;
+  (storage = window.localStorage).setItem(uid, uid);
+  fail = storage.getItem(uid) != uid;
+  storage.removeItem(uid);
+  fail && (storage = false);
+} catch (exception) {}
+
+function savePTI() {
+  if(storage) {
+    storage.setItem('playerPTI',$('#ptiPlayer').val());
+    storage.setItem('partnerPTI',$('#ptiPartner').val());
+    storage.setItem('opp1PTI',$('#ptiOpp1').val());
+    storage.setItem('opp1PTI',$('#ptiOpp2').val());
+  }
+
+}
+
+function restorePTI() {
+  if(storage) {
+    $('#ptiPlayer').val(storage.getItem('playerPTI'));
+    $('#ptiPartner').val(storage.getItem('partnerPTI'));
+    $('#ptiOpp1').val(storage.getItem('opp1PTI'));
+    $('#ptiOpp2').val(storage.getItem('opp1PTI'));
+  }
+
+}
+restorePTI();
+$(".pti").change(updateExpected);
+var expected = 0.5377;
+var PTISpread = 0;
+var PTISpreadScale = 1;
+
 var ctx = document.getElementById('chartJSContainer').getContext('2d');
 var pageChart;
 document.getElementById("lblExpected").innerText = `Expected ${expected}`;
@@ -144,6 +221,9 @@ function updateChart() {
       },
       tooltips: {
         callbacks: {
+          label: function(tooltipItem,data){
+            return `Games Won: ${tooltipItem.xLabel}, Adjustment: ${tooltipItem.yLabel.toFixed(4)}`;
+          },
           title: function(tooltipItem, all) {
             //console.log("Tooltips");
             return [
@@ -176,6 +256,7 @@ function updateChart() {
 updateChart(pageChart);
 
 function updateExpected() {
+  savePTI();
   var playerPTI = parseFloat(document.getElementById('ptiPlayer').value);
   var partnerPTI = parseFloat(document.getElementById('ptiPartner').value);
   var opp1PTI = parseFloat(document.getElementById('ptiOpp1').value);
