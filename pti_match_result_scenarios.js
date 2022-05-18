@@ -1,3 +1,149 @@
+var exampleWins=[
+  {
+    "teamGames": 12,
+    "oppGames": 0,
+    "setScores": "0&0"
+  },
+  {
+    "teamGames": 12,
+    "oppGames": 1,
+    "setScores": "0&1,1&0"
+  },
+  {
+    "teamGames": 12,
+    "oppGames": 2,
+    "setScores": "1&1,2&0,0&2"
+  },
+  {
+    "teamGames": 12,
+    "oppGames": 3,
+    "setScores": ""
+  },
+  {
+    "teamGames": 12,
+    "oppGames": 4,
+    "setScores": ""
+  },
+  {
+    "teamGames": 12,
+    "oppGames": 5,
+    "setScores": ""
+  },
+  {
+    "teamGames": 12,
+    "oppGames": 6,
+    "setScores": ""
+  },
+  {
+    "teamGames": 12,
+    "oppGames": 7,
+    "setScores": ""
+  },
+  {
+    "teamGames": 12,
+    "oppGames": 8,
+    "setScores": "4&4"
+  },
+  {
+    "teamGames": 13,
+    "oppGames": 7,
+    "setScores": "7-5,6-4"
+  },
+  {
+    "teamGames": 14,
+    "oppGames": 10,
+    "setScores": "7-5,7-5"
+  },
+  {
+    "teamGames": 14,
+    "oppGames": 11,
+    "setScores": "7-6,7-5"
+  },
+  {
+    "teamGames": 14,
+    "oppGames": 12,
+    "setScores": "7-6,7-6"
+  },
+  {
+    "teamGames": 14,
+    "oppGames": 18,
+    "setScores": "worst win: 0-6,7-6,7-6"
+  }
+];
+
+var exampleLosses = [
+  {
+    "teamGames": 18,
+    "oppGames": 14,
+    "setScores": "Best Loss: 6-0,6-7,6-7"
+  },
+  {
+    "teamGames": 12,
+    "oppGames": 14,
+    "setScores": "7-6,7-6"
+  },
+  {
+    "teamGames": 11,
+    "oppGames": 14,
+    "setScores": "7-6,7-5"
+  },
+  {
+    "teamGames": 10,
+    "oppGames": 14,
+    "setScores": "7-5,7-5"
+  },
+  {
+    "teamGames": 9,
+    "oppGames": 13,
+    "setScores": "7-5,6-4"
+  },
+  {
+    "teamGames": 8,
+    "oppGames": 12,
+    "setScores": "4&4"
+  },
+  {
+    "teamGames": 7,
+    "oppGames": 12,
+    "setScores": ""
+  },
+  {
+    "teamGames": 6,
+    "oppGames": 12,
+    "setScores": ""
+  },
+  {
+    "teamGames": 5,
+    "oppGames": 12,
+    "setScores": ""
+  },
+  {
+    "teamGames": 4,
+    "oppGames": 12,
+    "setScores": ""
+  },
+  {
+    "teamGames": 3,
+    "oppGames": 12,
+    "setScores": ""
+  },
+  {
+    "teamGames": 2,
+    "oppGames": 12,
+    "setScores": "1&1,2&0,0&2"
+  },
+  {
+    "teamGames": 1,
+    "oppGames": 12,
+    "setScores": "0&1,1&0"
+  },
+  {
+    "teamGames": 0,
+    "oppGames": 12,
+    "setScores": "0&0"
+  }
+];
+
 
 var twosets = [
 {

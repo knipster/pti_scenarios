@@ -27,6 +27,7 @@
         <header class="masthead mb-auto">
           <div class="inner">
             <h3 class="masthead-brand">PTI Movement Scenarios</h3>
+            <h5> Negative moves are good, positive bad</h5>
           </div>
         </header>
 
@@ -60,16 +61,56 @@
         </div>
         <input id="ptiOpp2" type="number" class="form-control pti" value=0  placeholder="0" aria-label="Second Opponent PTI" aria-describedby="basic-addon1">
       </div>
-    <br>
     </div>
-    <div class="container" id="intermediate_results">
-    <h5><span class="label label-default" id="lblExpected" for="expected">Expected:</span></h5>
-    <h5><span class="label label-default" id="lblSpread" for="expected">Spread:</span></h5>
-    <h5><span class="label label-default" id="lblSpreadScale" for="expected">Scale:</span></h5>
+    <div class="container">
+    <div class="card" id="intermediate_results">
+      <h5 class="card-title">Intermediate Calculations</h5>
+    <h6><span class="label label-default" id="lblExpected" for="expected">Expected:</span></h6>
+    <h6><span class="label label-default" id="lblSpread" for="expected">Spread:</span></h6>
+    <h6><span class="label label-default" id="lblSpreadScale" for="expected">Scale:</span></h6>
   </div>
+    </div>
+<div class="container">
+  <ul class="nav nav-tabs justify-content-between" role="tablist">
+  <li role="presentation" class="active"><a href="#tab-01" aria-controls="tab-01" role="tab" data-toggle="tab">Example Wins</a></li>
+  <li role="presentation"><a href="#tab-02" aria-controls="tab-02" role="tab" data-toggle="tab">Example Losses</a></li>
+  <li role="presentation"><a href="#tab-03" aria-controls="tab-03" role="tab" data-toggle="tab">Scenario Chart</a></li>
+  </ul>
+</div>
+<div class="tab-content">
+  <div role="tabpanel" class="tab-pane" id="tab-01">        
+  <div class="container" id="gridWin">
+   <div class="table-responsive">
+     <table id="grid" class="table table-condensed table-bordered">
+      <tr><th></th><th>Team Games</th><th>Opp Games</th><th>Set Scores</th><th>Opp %Games</th><th>Team %Games</th><th>Final Rating</th><th>Ratings Move</th></tr>
+      <tbody id="gridWin_body"></tbody>
+    </table>
+   </div>
+  </div>
+  </div>
+
+  
+  <div role="tabpanel" class="tab-pane" id="tab-02">        
+  <div class="container" id="gridLoss">
+   <div class="table-responsive">
+     <table id="grid" class="table table-condensed table-bordered">
+      <tr><th></th><th>Team Games</th><th>Opp Games</th><th>Set Scores</th><th>Opp %Games</th><th>Team %Games</th><th>Final Rating</th><th>Ratings Move</th></tr>
+      <tbody id="gridLoss_body"></tbody>
+    </table>
+   </div>
+  </div>
+  </div>
+  
+  <div role="tabpanel" class="tab-pane active" id="tab-03">        
   <div class="container" id="chart">
     <canvas id="chartJSContainer" width="300" height="270"></canvas>
   </div>
+  </div>
+</div>
+
+
+
+        
     <!-- Optional JavaScript -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.3.0/Chart.js"></script>
     <script src="pti_match_result_scenarios.js"></script>
@@ -124,6 +165,12 @@ var expected = 0.5377;
 var PTISpread = 0;
 var PTISpreadScale = 1;
 
+function pti_actual(win,winGames, loseGames) {
+  if(win) 
+    return (1+2*winGames/(winGames+loseGames))/3;
+  else
+    return (2*winGames/(winGames+loseGames))/3;
+}
 function pti_expected() {
   return 1 - (1 / (1 + 10 ** ((PTISpread) / 24)))
 }
@@ -157,7 +204,39 @@ var threeset_data = threesets.map(objToPoint)
 var twoset_loss = twosetloss.map(objToPoint)
 var threeset_loss = threesetloss.map(objToPoint)
 
+function updateGrid() {
+  
+  var playerPTI = parseFloat(document.getElementById('ptiPlayer').value)||0;
 
+  example2row= function(x){
+    return `<td>${x.teamGames}</td><td>${x.oppGames}</td><td>${x.setScores}</td>`+
+    `<td>${(100*x.teamGames/(x.teamGames+x.oppGames)).toFixed(0)}%</td>`+
+    `<td>${(100*x.oppGames/(x.teamGames+x.oppGames)).toFixed(0)}%</td>`+
+    `<td>${(playerPTI+pti_adjustment(expected,pti_actual(1,x.teamGames,x.oppGames))).toFixed(2)}</td>`+
+    `<td>${(pti_adjustment(expected,pti_actual(1,x.teamGames,x.oppGames))).toFixed(2)}</td></tr>`;
+  };
+  
+  var grid=document.getElementById("gridWin_body");
+  gBody=exampleWins.map(example2row);
+  grid.innerHTML="<tr><td rowspan=15><span>Example Wins</span></td></tr>"+gBody.join('');
+
+  grid=document.getElementById("gridLoss_body");
+  gBody=exampleLosses.map(example2row);
+  grid.innerHTML="<tr><td rowspan=15><span>Example Losses</span></td></tr>"+gBody.join('');
+  
+  //Update Classes for conditional formatting
+  $(function() {
+            $('tr td:nth-child(7)').each(function(index) {
+                var score = $(this).text();
+                if (score < 0.0)
+                  $(this).addClass(Array(Math.round(Math.abs(score)*5)).join("g"));
+                else 
+                  $(this).addClass(Array(Math.round(score*5)).join("r"));
+            });
+       });
+
+  
+}
 function updateChart() {
   document.getElementById("lblExpected").innerText = `Expected ${(100*expected).toFixed(2)} %`;
 
@@ -309,10 +388,11 @@ function updateExpected() {
   console.log(expected);
   dExp = expected.toFixed(4);
   document.getElementById("lblExpected").innerText = `Expected ${dExp}`;
-  document.getElementById("lblSpread").innerText = `Spread ${PTISpread}`;
-  document.getElementById("lblSpreadScale").innerText = `Spread Scale ${PTISpreadScale}`;
+  document.getElementById("lblSpread").innerText = `Spread ${PTISpread.toFixed(2)}`;
+  document.getElementById("lblSpreadScale").innerText = `Spread Scale ${PTISpreadScale.toFixed(2)}`;
 
   updateChart();
+  updateGrid();
 
 }
 updateExpected();

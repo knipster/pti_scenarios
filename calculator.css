@@ -4,6 +4,51 @@
 
 /* Links */
 canvas { background-color : #eee; }
+h5 { font-weight: normal;}
+td.gg {
+  background-color: #79d88f;
+}
+
+td.ggg, td.gggg {
+  background-color: #52c06b;
+}
+
+
+td.ggggg,td.gggggg,td.ggggggg,td.gggggggg,td.ggggggggg {
+  background-color: #28a745;
+}
+
+
+td.rr {
+  background-color: #db7680;
+}
+
+td.rrr, td.rrrr {
+  background-color: #df6570;
+}
+
+
+td.rrrrr,td.rrrrrr,td.rrrrrrr,td.rrrrrrrr,td.rrrrrrrrr {
+  background-color: #e04957;
+}
+
+
+td 
+{
+    vertical-align: center;
+  text-align: center;
+}
+
+td span 
+{
+  -ms-writing-mode: tb-rl;
+  -webkit-writing-mode: vertical-rl;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  white-space: nowrap;
+      font-weight: bold;
+}
+
 :root {
     --jumbotron-padding-y: 3rem;
   }
