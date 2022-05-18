@@ -208,20 +208,20 @@ function updateGrid() {
   
   var playerPTI = parseFloat(document.getElementById('ptiPlayer').value)||0;
 
-  example2row= function(x){
+    example2row = (win) => (function(x){
     return `<td>${x.teamGames}</td><td>${x.oppGames}</td><td>${x.setScores}</td>`+
-    `<td>${(100*x.teamGames/(x.teamGames+x.oppGames)).toFixed(0)}%</td>`+
     `<td>${(100*x.oppGames/(x.teamGames+x.oppGames)).toFixed(0)}%</td>`+
-    `<td>${(playerPTI+pti_adjustment(expected,pti_actual(1,x.teamGames,x.oppGames))).toFixed(2)}</td>`+
-    `<td>${(pti_adjustment(expected,pti_actual(1,x.teamGames,x.oppGames))).toFixed(2)}</td></tr>`;
-  };
+    `<td>${(100*x.teamGames/(x.teamGames+x.oppGames)).toFixed(0)}%</td>`+
+    `<td>${(playerPTI+pti_adjustment(expected,pti_actual(win,x.teamGames,x.oppGames))).toFixed(2)}</td>`+
+    `<td>${(pti_adjustment(expected,pti_actual(win,x.teamGames,x.oppGames))).toFixed(2)}</td></tr>`;
+    });
   
   var grid=document.getElementById("gridWin_body");
-  gBody=exampleWins.map(example2row);
+    gBody=exampleWins.map(example2row(1));
   grid.innerHTML="<tr><td rowspan=15><span>Example Wins</span></td></tr>"+gBody.join('');
 
   grid=document.getElementById("gridLoss_body");
-  gBody=exampleLosses.map(example2row);
+    gBody=exampleLosses.map(example2row(0));
   grid.innerHTML="<tr><td rowspan=15><span>Example Losses</span></td></tr>"+gBody.join('');
   
   //Update Classes for conditional formatting
