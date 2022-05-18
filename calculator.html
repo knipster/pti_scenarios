@@ -33,21 +33,36 @@
 
 
     <div class="container" id="inputs">
-
-      <div class="input-group mb-3">
-        <div class="input-group-prepend">
-          <span class="input-group-text" id="basic-addon1">Player PTI:</span>
+      <div class="row">
+        <div class="col d-flex flex-column">
+        <div class="input-group mb-3">
+          <div class="input-group-prepend">
+            <span class="input-group-text" id="basic-addon1">Player PTI:</span>
+          </div>
+          <input id="ptiPlayer" type="number" class="form-control pti" value=0 placeholder="0" aria-label="Player PTI" aria-describedby="basic-addon1">
         </div>
-        <input id="ptiPlayer" type="number" class="form-control pti" value=0 placeholder="0" aria-label="Player PTI" aria-describedby="basic-addon1">
-      </div>
 
-      <div class="input-group mb-3">
-        <div class="input-group-prepend">
-          <span class="input-group-text" id="basic-addon1">Partner PTI:</span>
+        <div class="input-group mb-3">
+          <div class="input-group-prepend">
+            <span class="input-group-text" id="basic-addon1">Partner PTI:</span>
+          </div>
+          <input  id="ptiPartner" type="number" class="form-control pti" value=0  placeholder="0" aria-label="Partner PTI" aria-describedby="basic-addon1">
         </div>
-        <input  id="ptiPartner" type="number" class="form-control pti" value=0  placeholder="0" aria-label="Partner PTI" aria-describedby="basic-addon1">
-      </div>
 
+        <div class="input-group mb-3">
+          <div class="input-group-prepend">
+            <label class="input-group-text" for="matchType">Match Type</label>
+          </div>
+          <select class="custom-select" id="matchType">
+            <option value="1.0" selected>League</option>
+            <option value="1.5">Tournament</option>
+            <option value=".5">Casual/Other</option>
+          </select>
+        </div>
+
+      </div>
+  
+      <div class="col d-flex flex-column">
       <div class="input-group mb-3">
         <div class="input-group-prepend">
           <span class="input-group-text" id="basic-addon1">Opp PTI:</span>
@@ -61,13 +76,32 @@
         </div>
         <input id="ptiOpp2" type="number" class="form-control pti" value=0  placeholder="0" aria-label="Second Opponent PTI" aria-describedby="basic-addon1">
       </div>
+
+      <div class="input-group mb-3">
+        <div class="input-group-prepend">
+          <span class="input-group-text" id="basic-addon1">Score:</span>
+        </div>
+        <input id="matchScore" type="text" class="form-control"  placeholder="<e.g. 6-4,6-7,6-2>" aria-label="Match Score" aria-describedby="basic-addon1">
+      </div>
+
     </div>
+  </div>
+  </div>
     <div class="container">
     <div class="card" id="intermediate_results">
-      <h5 class="card-title">Intermediate Calculations</h5>
-    <h6><span class="label label-default" id="lblExpected" for="expected">Expected:</span></h6>
-    <h6><span class="label label-default" id="lblSpread" for="expected">Spread:</span></h6>
-    <h6><span class="label label-default" id="lblSpreadScale" for="expected">Scale:</span></h6>
+    <h5 class="card-title">Intermediate Calculations</h5>
+    <div class="row">
+      <div class="col">
+        <h6><span class="label label-default" id="lblExpected" >Expected:</span></h6>
+        <h6><span class="label label-default" id="lblActual" ></span></h6>
+        <h6><span class="label label-default" id="lblAdjustment" >Match Scale:</span></h6>
+      </div>
+      <div class="col">
+        <h6><span class="label label-default" id="lblSpread" >Spread:</span></h6>
+        <h6><span class="label label-default" id="lblSpreadScale" >Spread Scale:</span></h6>
+        <h6><span class="label label-default" id="lblMatchScale" >Match Scale:</span></h6>
+      </div>
+    </div>
   </div>
     </div>
 <div class="container">
@@ -146,6 +180,8 @@ function savePTI() {
     storage.setItem('partnerPTI',$('#ptiPartner').val());
     storage.setItem('opp1PTI',$('#ptiOpp1').val());
     storage.setItem('opp2PTI',$('#ptiOpp2').val());
+    storage.setItem('matchType',$('#matchType').val());
+    storage.setItem('matchScore',$('#matchScore').val());
   }
 
 }
@@ -156,14 +192,24 @@ function restorePTI() {
     $('#ptiPartner').val(parseFloat(storage.getItem('partnerPTI')) || 0);
     $('#ptiOpp1').val(parseFloat(storage.getItem('opp1PTI')) || 0);
     $('#ptiOpp2').val(parseFloat(storage.getItem('opp2PTI')) || 0);
+    $('#matchType').val((parseFloat(storage.getItem('matchType')) || 1.0).toFixed(1));
+    $('#matchScore').val(storage.getItem('matchScore') || "");
   }
 
 }
 restorePTI();
 $(".pti").change(updateExpected);
+$("#matchType").change(updateExpected);
+$("#matchScore").change(updateExpected);
+
 var expected = 0.5377;
 var PTISpread = 0;
 var PTISpreadScale = 1;
+var MatchTypeScale=1;
+var actual="";
+var adjustment="";
+var actual_match=[];
+
 
 function pti_actual(win,winGames, loseGames) {
   if(win) 
@@ -177,9 +223,9 @@ function pti_expected() {
 
 function pti_adjustment(expected_result,actual_result) {
   if (((expected_result>.5) && (actual_result < .5)) || ((expected_result<.5) && (actual_result > .5)))
-    return 2.8* (expected_result-actual_result);
+    return 2.8*MatchTypeScale* (expected_result-actual_result);
   else
-    return PTISpreadScale*2.8* (expected_result-actual_result);
+    return PTISpreadScale*2.8*MatchTypeScale* (expected_result-actual_result);
 }
 
 
@@ -238,7 +284,7 @@ function updateGrid() {
   
 }
 function updateChart() {
-  document.getElementById("lblExpected").innerText = `Expected ${(100*expected).toFixed(2)} %`;
+  document.getElementById("lblExpected").innerText = `Expected ${(100*expected).toFixed(2)} `;
 
   twoset_data = twosets.map(objToPoint)
   threeset_data = threesets.map(objToPoint)
@@ -251,7 +297,16 @@ function updateChart() {
   var options = {
     type: 'scatter',
     data: {
-      datasets: [{
+      datasets: [
+      {
+          borderColor: "black",
+          backgroundColor: "black",
+          pointStyle: 'star',
+          label: 'Actual',
+          data: [actual_match],
+          borderWidth: 1,
+          showLine: false
+        },{
           borderColor: "blue",
           backgroundColor: "blue",
           label: '2-Set Win',
@@ -346,10 +401,11 @@ function updateChart() {
 
   if (typeof pageChart !== 'undefined') {
     console.log("Page Chart Update");
-    pageChart.data.datasets[0].data = twoset_data;
-    pageChart.data.datasets[1].data = threeset_data;
-    pageChart.data.datasets[2].data = twoset_loss;
-    pageChart.data.datasets[3].data = threeset_loss;
+    pageChart.data.datasets[0].data = [actual_match];
+    pageChart.data.datasets[1].data = twoset_data;
+    pageChart.data.datasets[2].data = threeset_data;
+    pageChart.data.datasets[3].data = twoset_loss;
+    pageChart.data.datasets[4].data = threeset_loss;
 
     pageChart.update();
   } else {
@@ -360,12 +416,56 @@ function updateChart() {
 
 updateChart(pageChart);
 
+function updateScore() {
+  var score=document.getElementById("matchScore").value;
+  if (score=="")
+    {
+      actual="";
+      adjustment="";
+      return;
+    }
+
+  console.log(score);
+
+  var sets=score.split(",");
+  add=(a, b) => a + b;
+  team1scores=sets.map((x)=>parseInt(x.split("-")[0])).reduce(add,0);
+  team2scores=sets.map((x)=>parseInt(x.split("-")[1])).reduce(add,0);
+
+  team1Win=sets.map((x)=> parseInt(x.split("-")[0]) > parseInt(x.split("-")[1])).reduce(add)>1;
+  
+  actual=pti_actual(team1Win,team1scores,team2scores);
+  adjustment=pti_adjustment(expected,actual);
+
+  actual_match={x: team1scores, y:adjustment, name:'Actual',label:'Actual'};
+
+  console.log(team1Win);
+  console.log(team1scores);
+  console.log(team2scores);
+}
+
+function updateIntermediate() {
+  document.getElementById("lblExpected").innerText = `Expected ${expected.toFixed(4)}`;
+  document.getElementById("lblSpread").innerText = `Spread ${PTISpread.toFixed(2)}`;
+  document.getElementById("lblSpreadScale").innerText = `Spread Scale ${PTISpreadScale.toFixed(2)}`;
+  document.getElementById("lblMatchScale").innerText = `Match Scale ${MatchTypeScale.toFixed(1)}`;
+  if(document.getElementById("matchScore").value!=""){
+    document.getElementById("lblActual").innerText=`Actual: ${(100*actual).toFixed(4)}`;
+    if(adjustment)
+      document.getElementById("lblAdjustment").innerText=`Adjustment: ${(adjustment).toFixed(2)}`;
+  } else {
+    document.getElementById("lblActual").innerText="";
+    document.getElementById("lblAdjustment").innerText="";
+  }
+}
+
 function updateExpected() {
   savePTI();
   var playerPTI = parseFloat(document.getElementById('ptiPlayer').value);
   var partnerPTI = parseFloat(document.getElementById('ptiPartner').value);
   var opp1PTI = parseFloat(document.getElementById('ptiOpp1').value);
   var opp2PTI = parseFloat(document.getElementById('ptiOpp2').value);
+  MatchTypeScale=parseFloat(document.getElementById("matchType").value);
 
   team1 = playerPTI + partnerPTI;
   team2 = opp1PTI + opp2PTI;
@@ -383,14 +483,9 @@ function updateExpected() {
   
 
   expected = pti_expected();
-  console.log(team1);
-  console.log(team2);
-  console.log(expected);
-  dExp = expected.toFixed(4);
-  document.getElementById("lblExpected").innerText = `Expected ${dExp}`;
-  document.getElementById("lblSpread").innerText = `Spread ${PTISpread.toFixed(2)}`;
-  document.getElementById("lblSpreadScale").innerText = `Spread Scale ${PTISpreadScale.toFixed(2)}`;
 
+  updateScore();
+  updateIntermediate();
   updateChart();
   updateGrid();
 
