@@ -454,6 +454,8 @@ function updateIntermediate() {
     document.getElementById("lblActual").innerText=`Actual: ${(100*actual).toFixed(4)}`;
     if(adjustment)
       document.getElementById("lblAdjustment").innerText=`Adjustment: ${(adjustment).toFixed(2)}`;
+    else
+      document.getElementById("lblAdjustment").innerText="";
   } else {
     document.getElementById("lblActual").innerText="";
     document.getElementById("lblAdjustment").innerText="";
