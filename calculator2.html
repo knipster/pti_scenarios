@@ -1,0 +1,611 @@
+<!doctype html>
+<html>
+  <head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <!-- Bootstrap CSS -->
+   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+   <link rel="stylesheet" href="calculator.css">
+
+
+  
+
+  </head>
+    <body>
+      <div class="cover-container d-flex h-100 p-3 mx-auto flex-column">
+        <header class="masthead mb-auto">
+          <div class="inner">
+            <h3 class="masthead-brand">PTI Movement Scenarios</h3>
+            <h5> Negative moves are good, positive bad (beta)</h5>
+          </div>
+        </header>
+
+
+    <div class="container" id="inputs">
+      <div class="row">
+        <div class="col d-flex flex-column">
+        <div class="input-group mb-3">
+          <div class="input-group-prepend">
+            <span class="input-group-text" id="basic-addon1">Player PTI:</span>
+          </div>
+          <input id="ptiPlayer" type="number" class="form-control pti" value=0 placeholder="0" aria-label="Player PTI" aria-describedby="basic-addon1">
+          <div class="input-group-prepend">
+            <span class="input-group-text" id="basic-addon1">Player Sigma:</span>
+          </div>
+          <input id="sigmaPlayer" type="number" class="form-control pti" value=2.8 placeholder="0" aria-label="Player PTI" aria-describedby="basic-addon1">
+        </div>
+
+        
+        <div class="input-group mb-3">
+          <div class="input-group-prepend">
+            <span class="input-group-text" id="basic-addon1">Partner PTI:</span>
+          </div>
+          <input  id="ptiPartner" type="number" class="form-control pti" value=0  placeholder="0" aria-label="Partner PTI" aria-describedby="basic-addon1">
+          <div class="input-group-prepend">
+            <span class="input-group-text" id="basic-addon1">Partner Sigma:</span>
+          </div>
+          <input id="sigmaPartner" type="number" class="form-control pti" value=2.8 placeholder="0" aria-label="Player PTI" aria-describedby="basic-addon1">
+      </div>
+
+      <div class="input-group mb-3">
+        <div class="input-group-prepend">
+          <span class="input-group-text" id="basic-addon1">Score:</span>
+        </div>
+        <input id="matchScore" type="text" class="form-control"  placeholder="<e.g. 6-4,6-7,6-2>" aria-label="Match Score" aria-describedby="basic-addon1">
+      </div>
+
+      </div>
+  
+      <div class="col d-flex flex-column">
+      <div class="input-group mb-3">
+        <div class="input-group-prepend">
+          <span class="input-group-text" id="basic-addon1">Opp PTI:</span>
+        </div>
+        <input id="ptiOpp1" type="number" class="form-control pti" value=0 placeholder="0" aria-label="First Opponent PTI" aria-describedby="basic-addon1">
+        <div class="input-group-prepend">
+          <span class="input-group-text" id="basic-addon1">Opp Sigma:</span>
+        </div>
+        <input id="sigmaOpp1" type="number" class="form-control pti" value=2.8 placeholder="0" aria-label="Player PTI" aria-describedby="basic-addon1">
+    
+      </div>
+
+      <div class="input-group mb-3">
+        <div class="input-group-prepend">
+          <span class="input-group-text" id="basic-addon1">Opp PTI:</span>
+        </div>
+        <input id="ptiOpp2" type="number" class="form-control pti" value=0  placeholder="0" aria-label="Second Opponent PTI" aria-describedby="basic-addon1">
+        <div class="input-group-prepend">
+          <span class="input-group-text" id="basic-addon1">Opp Sigma:</span>
+        </div>
+        <input id="sigmaOpp2" type="number" class="form-control pti" value=2.8 placeholder="0" aria-label="Player PTI" aria-describedby="basic-addon1">
+    
+      </div>
+
+
+
+    </div>
+  </div>
+  </div>
+    <div class="container">
+    <div class="card" id="intermediate_results">
+    <h5 class="card-title">Intermediate Calculations</h5>
+    <div class="row">
+      <div class="col">
+        <h6><span class="label label-default" id="lblSpread" >Spread:</span></h6>
+        <h6><span class="label label-default" id="lblAdjustment" >Adjustment:</span></h6>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col">
+        <h5 style="text-align:right">Before</h5>
+        <h6><span class="label label-default" style="text-align:left">Player PTI:</span> <span class="label label-default" style="float:right" id="PlayerRating" ></span></h6>
+        <h6><span class="label label-default" style="text-align:left">Player Perf:</span> <span class="label label-default" style="float:right" id="PlayerPerf" ></span></h6>
+        <h6><span class="label label-default" style="text-align:left">Player Volatility:</span><span class="label label-default" style="float:right" id="PlayerVol" ></span></h6>
+        <h6><p></p></h6>
+        <h6><span class="label label-default" style="text-align:left">Partner PTI:</span><span class="label label-default" style="float:right" id="PartnerRating" ></span></h6>
+        <h6><span class="label label-default" style="text-align:left">Partner Perf:</span><span class="label label-default" style="float:right" id="PartnerPerf" ></span></h6>
+        <h6><span class="label label-default" style="text-align:left">Partner Volatility:</span><span class="label label-default" style="float:right" id="PartnerVol" ></span></h6>
+        <h6><p></p></h6>
+        <h6><span class="label label-default" style="text-align:left">Opp PTI:</span><span class="label label-default" style="float:right" id="Opp1Rating" ></span></h6>
+        <h6><span class="label label-default" style="text-align:left">Opp Perf:</span><span class="label label-default" style="float:right" id="Opp1Perf" ></span></h6>
+        <h6><span class="label label-default" style="text-align:left" >Opp Volatility:</span><span class="label label-default" style="float:right" id="Opp1Vol" ></span></h6>
+        <h6><p></p></h6>
+        <h6><span class="label label-default" style="text-align:left">Opp PTI:</span><span class="label label-default" style="float:right" id="Opp2Rating" ></span></h6>
+        <h6><span class="label label-default" style="text-align:left">Opp Perf:</span><span class="label label-default" style="float:right" id="Opp2Perf" ></span></h6>
+        <h6><span class="label label-default" style="text-align:left">Opp Volatility:</span><span class="label label-default" style="float:right" id="Opp2Vol" ></span></h6>
+
+      </div>
+      <div class="col">
+        <h5>After</h5>
+        <h6><span class="label label-default"  id="PlayerAdjRating" ></span></h6>
+        <h6><span class="label label-default"  id="PlayerAdjPerf" ></span></h6>
+        <h6><span class="label label-default"  id="PlayerAdjVol" ></span></h6>
+        <h6><p></p></h6>
+        <h6><span class="label label-default"  id="PartnerAdjRating" ></span></h6>
+        <h6><span class="label label-default"  id="PartnerAdjPerf" ></span></h6>
+        <h6><span class="label label-default"  id="PartnerAdjVol" ></span></h6>
+        <h6><p></p></h6>
+        <h6><span class="label label-default"  id="Opp1AdjRating" ></span></h6>
+        <h6><span class="label label-default"  id="Opp1AdjPerf" ></span></h6>
+        <h6><span class="label label-default"  id="Opp1AdjVol" ></span></h6>
+        <h6><p></p></h6>
+        <h6><span class="label label-default"  id="Opp2AdjRating" ></span></h6>
+        <h6><span class="label label-default"  id="Opp2AdjPerf" ></span></h6>
+        <h6><span class="label label-default"  id="Opp2AdjVol" ></span></h6>
+
+      </div>
+    </div>
+  </div>
+    </div>
+<div class="container">
+  <ul class="nav nav-tabs justify-content-between" role="tablist">
+  <li role="presentation" class="active"><a href="#tab-01" aria-controls="tab-01" role="tab" data-toggle="tab">Example Wins</a></li>
+  <li role="presentation"><a href="#tab-02" aria-controls="tab-02" role="tab" data-toggle="tab">Example Losses</a></li>
+  <li role="presentation"><a href="#tab-03" aria-controls="tab-03" role="tab" data-toggle="tab">Scenario Chart</a></li>
+  </ul>
+</div>
+<div class="tab-content">
+  <div role="tabpanel" class="tab-pane" id="tab-01">        
+  <div class="container" id="gridWin">
+   <div class="table-responsive">
+     <table id="grid" class="table table-condensed table-bordered">
+      <tr><th></th><th>Team Games</th><th>Opp Games</th><th>Set Scores</th><th>Opp %Games</th><th>Team %Games</th><th>Final Rating</th><th>Ratings Move</th></tr>
+      <tbody id="gridWin_body"></tbody>
+    </table>
+   </div>
+  </div>
+  </div>
+
+  
+  <div role="tabpanel" class="tab-pane" id="tab-02">        
+  <div class="container" id="gridLoss">
+   <div class="table-responsive">
+     <table id="grid" class="table table-condensed table-bordered">
+      <tr><th></th><th>Team Games</th><th>Opp Games</th><th>Set Scores</th><th>Opp %Games</th><th>Team %Games</th><th>Final Rating</th><th>Ratings Move</th></tr>
+      <tbody id="gridLoss_body"></tbody>
+    </table>
+   </div>
+  </div>
+  </div>
+  
+  <div role="tabpanel" class="tab-pane active" id="tab-03">        
+  <div class="container" id="chart">
+    <canvas id="chartJSContainer" width="300" height="270"></canvas>
+  </div>
+  </div>
+</div>
+
+
+
+        
+    <!-- Optional JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.3.0/Chart.js"></script>
+    <script src="pti_match_result_scenarios.js"></script>
+    <script src="pti2.js"></script>
+    <!-- jQuery first, then Popper.js, then Bootstrap JS -->
+
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.14.7/dist/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+    <script src="openskill_browser.js"></script>
+    <script>
+/**
+ * Feature detect + local reference for simple use of local storage
+ * Use like:
+ * if (storage) {
+ *    storage.setItem('key', 'value');
+ *    storage.getItem('key');
+ * }
+ *
+ */
+ var storage;
+var fail;
+var uid;
+try {
+  uid = new Date;
+  (storage = window.localStorage).setItem(uid, uid);
+  fail = storage.getItem(uid) != uid;
+  storage.removeItem(uid);
+  fail && (storage = false);
+} catch (exception) {}
+
+function savePTI() {
+  if(storage) {
+    storage.setItem('playerPTI',$('#ptiPlayer').val());
+    storage.setItem('partnerPTI',$('#ptiPartner').val());
+    storage.setItem('opp1PTI',$('#ptiOpp1').val());
+    storage.setItem('opp2PTI',$('#ptiOpp2').val());
+
+    storage.setItem('playerSIGMA',$('#sigmaPlayer').val());
+    storage.setItem('partnerSIGMA',$('#sigmaPartner').val());
+    storage.setItem('opp1SIGMA',$('#sigmaOpp1').val());
+    storage.setItem('opp2SIGMA',$('#sigmaOpp2').val());
+
+    
+    storage.setItem('matchScore',$('#matchScore').val());
+  }
+
+}
+
+function restorePTI() {
+  if(storage) {
+    $('#ptiPlayer').val(parseFloat(storage.getItem('playerPTI')) || 0);
+    $('#ptiPartner').val(parseFloat(storage.getItem('partnerPTI')) || 0);
+    $('#ptiOpp1').val(parseFloat(storage.getItem('opp1PTI')) || 0);
+    $('#ptiOpp2').val(parseFloat(storage.getItem('opp2PTI')) || 0);
+
+    $('#sigmaPlayer').val(parseFloat(storage.getItem('playerSIGMA')) || 2.8);
+    $('#sigmaPartner').val(parseFloat(storage.getItem('partnerSIGMA')) || 2.8);
+    $('#sigmaOpp1').val(parseFloat(storage.getItem('opp1SIGMA')) || 2.8);
+    $('#sigmaOpp2').val(parseFloat(storage.getItem('opp2SIGMA')) || 2.8);
+
+    $('#matchType').val((parseFloat(storage.getItem('matchType')) || 1.0).toFixed(1));
+    $('#matchScore').val(storage.getItem('matchScore') || "");
+  }
+
+}
+restorePTI();
+$(".pti").change(update_players);
+$("#matchScore").change(update_sets);
+
+var expected = 0.5377;
+var PTISpread = 0;
+var PTISpreadScale = 1;
+var MatchTypeScale=1;
+var actual="";
+var adjustment="";
+var actual_match=[];
+
+
+var players_list=[];
+var set_list=[];
+function update_players() {
+  players_list=[
+                {'Perf': parseFloat($('#ptiPlayer').val()), 'Volatility': parseFloat($('#sigmaPlayer').val()) }
+                ,{'Perf': parseFloat($('#ptiPartner').val()), 'Volatility': parseFloat($('#sigmaPartner').val()) }
+                ,{'Perf': parseFloat($('#ptiOpp1').val()), 'Volatility': parseFloat($('#sigmaOpp1').val()) }
+                ,{'Perf': parseFloat($('#ptiOpp2').val()), 'Volatility': parseFloat($('#sigmaOpp2').val()) }
+               ];
+
+  console.log("Players")
+  console.log(players_list);
+  savePTI();
+  updateIntermediate();  
+}
+update_players();
+
+
+function update_sets() {
+  var score=document.getElementById("matchScore").value;
+  if (score=="")
+    {
+      actual="";
+      adjustment="";
+      return;
+    }
+
+  var sets=score.split(",");
+
+  set_list=sets.map( (set) => {  
+        games=set.split("-");
+
+        t1score=parseInt(games[0]);
+        t2score=parseInt(games[1]);
+        gamepct=Math.max(t1score,t2score)/(t1score+t2score);
+        winner= (t1score>t2score)?0:1;
+
+        return [winner,gamepct]
+        
+       });
+
+  console.log(set_list);
+  updateIntermediate();
+}
+update_sets();
+
+
+
+
+function pti2_adjustment() {
+  rvalue=[];
+  if (set_list.length && players_list.length) {
+    converted_players_list=players_list.map((x) => ratingsigmaTOPerfvolatility(x['Perf'],x['Volatility']));
+    
+    newRatings=update_pti2_ratings(converted_players_list,set_list);
+    console.log("Before");
+    console.log(converted_players_list);
+    console.log("Adjusted");
+    console.log(newRatings);
+    
+
+    adjustment=players_list[0]['Perf']-PerfvolatityTOpti2rating(newRatings[0]);   
+
+    rvalue=[converted_players_list,newRatings];
+  }
+  
+  return rvalue;
+}  
+  
+
+
+
+
+// var ctx = document.getElementById('chartJSContainer').getContext('2d');
+// var pageChart;
+// document.getElementById("lblExpected").innerText = `Expected ${expected}`;
+
+// objToPoint = function(ps) {
+//   var adjust = pti1_adjustment(expected,ps.eloActual);
+
+//   return ({
+//     x: ps.winnerGames,
+//     y: adjust,
+//     name: ps.possibleScores,
+//     label: ps.possibleScores
+//   })
+// }
+
+
+// var twoset_data = twosets.map(objToPoint)
+// var threeset_data = threesets.map(objToPoint)
+// var twoset_loss = twosetloss.map(objToPoint)
+// var threeset_loss = threesetloss.map(objToPoint)
+
+function updateGrid() {
+  
+  // var playerPTI = parseFloat(document.getElementById('ptiPlayer').value)||0;
+
+  //   example2row = (win) => (function(x){
+  //   return `<td>${x.teamGames}</td><td>${x.oppGames}</td><td>${x.setScores}</td>`+
+  //   `<td>${(100*x.oppGames/(x.teamGames+x.oppGames)).toFixed(0)}%</td>`+
+  //   `<td>${(100*x.teamGames/(x.teamGames+x.oppGames)).toFixed(0)}%</td>`+
+  //   `<td>${(playerPTI+pti1_adjustment(expected,pti1_actual(win,x.teamGames,x.oppGames))).toFixed(2)}</td>`+
+  //   `<td>${(pti1_adjustment(expected,pti1_actual(win,x.teamGames,x.oppGames))).toFixed(2)}</td></tr>`;
+  //   });
+  
+  // var grid=document.getElementById("gridWin_body");
+  //   gBody=exampleWins.map(example2row(1));
+  // grid.innerHTML="<tr><td rowspan=15><span>Example Wins</span></td></tr>"+gBody.join('');
+
+  // grid=document.getElementById("gridLoss_body");
+  //   gBody=exampleLosses.map(example2row(0));
+  // grid.innerHTML="<tr><td rowspan=15><span>Example Losses</span></td></tr>"+gBody.join('');
+  
+  // //Update Classes for conditional formatting
+  // $(function() {
+  //           $('tr td:nth-child(7)').each(function(index) {
+  //               var score = $(this).text();
+  //               if (score < 0.0)
+  //                 $(this).addClass(Array(Math.round(Math.abs(score)*5)).join("g"));
+  //               else 
+  //                 $(this).addClass(Array(Math.round(score*5)).join("r"));
+  //           });
+  //      });
+
+  
+}
+function updateChart() {
+  // document.getElementById("lblExpected").innerText = `Expected ${(100*expected).toFixed(2)} `;
+
+  // twoset_data = twosets.map(objToPoint)
+  // threeset_data = threesets.map(objToPoint)
+  // twoset_loss = twosetloss.map(objToPoint)
+  // threeset_loss = threesetloss.map(objToPoint)
+
+
+  // //console.log(threeset_data)
+
+  // var options = {
+  //   type: 'scatter',
+  //   data: {
+  //     datasets: [
+  //     {
+  //         borderColor: "black",
+  //         backgroundColor: "black",
+  //         pointStyle: 'star',
+  //         pointRadius: 7,
+  //         label: 'Actual',
+  //         data: [actual_match],
+  //         borderWidth: 1,
+  //         showLine: false
+  //       },{
+  //         borderColor: "blue",
+  //         backgroundColor: "blue",
+  //         label: '2-Set Win',
+  //         data: twoset_data,
+  //         borderWidth: 1,
+  //         showLine: false
+  //       }, {
+  //         borderColor: "green",
+  //         backgroundColor: "green",
+  //         label: '3-Set Win',
+  //         data: threeset_data,
+  //         borderWidth: 1,
+  //         showLine: false
+  //       }, {
+  //         borderColor: "red",
+  //         backgroundColor: "red",
+  //         label: '2-Set Loss',
+  //         data: twoset_loss,
+  //         borderWidth: 1,
+  //         showLine: false
+  //       },
+  //       {
+  //         borderColor: "orange",
+  //         backgroundColor: "orange",
+  //         label: '3-Set Loss',
+  //         data: threeset_loss,
+  //         borderWidth: 1,
+  //         showLine: false
+  //       }
+
+  //     ]
+  //   },
+  //   options: {
+  //     title: {
+  //       display: true,
+  //       text: "PTI Movement",
+  //       fontSize: 14,
+  //     },
+  //     legend: {
+  //       display: true,
+  //       position: 'bottom'
+  //     },
+  //     scales: {
+  //       xAxes: [{
+  //         scaleLabel: {
+  //           display: true,
+  //           labelString: "Games Won"
+  //         },
+  //         gridLines: {
+  //           display: true,
+  //         },
+  //         ticks: {
+  //           callback: function(value, index, values) {
+  //             //console.log("ticks");
+  //             return value.toLocaleString();
+  //           }
+  //         }
+  //       }],
+  //       yAxes: [{
+  //         ticks: {
+  //           min: -3,
+  //           max: 3
+  //         },
+  //         scaleLabel: {
+  //           display: true,
+  //           labelString: "Adjustment"
+  //         },
+  //         gridLines: {
+  //           display: true,
+  //         }
+  //       }]
+  //     },
+  //     tooltips: {
+  //       callbacks: {
+  //         label: function(tooltipItem,data){
+  //           return `Games Won: ${tooltipItem.xLabel}, Adjustment: ${tooltipItem.yLabel.toFixed(4)}`;
+  //         },
+  //         title: function(tooltipItem, all) {
+  //           //console.log("Tooltips");
+  //           return [
+  //             all.datasets[tooltipItem[0].datasetIndex].label /*data[tooltipItem[0].index].name */ ,
+  //           ]
+  //         }
+
+  //       }
+  //     }
+  //   }
+
+  // };
+
+
+
+  // if (typeof pageChart !== 'undefined') {
+  //   console.log("Page Chart Update");
+  //   pageChart.data.datasets[0].data = [actual_match];
+  //   pageChart.data.datasets[1].data = twoset_data;
+  //   pageChart.data.datasets[2].data = threeset_data;
+  //   pageChart.data.datasets[3].data = twoset_loss;
+  //   pageChart.data.datasets[4].data = threeset_loss;
+
+  //   pageChart.update();
+  // } else {
+  //   console.log("Page Chart Creation");
+  //   pageChart = new Chart(ctx, options);
+  // }
+}
+
+//updateChart(pageChart);
+
+function updateScore() {
+  var score=document.getElementById("matchScore").value;
+  if (score=="")
+    {
+      actual="";
+      adjustment="";
+      return;
+    }
+
+  console.log(score);
+
+  var sets=score.split(",");
+  add=(a, b) => a + b;
+  team1scores=sets.map((x)=>parseInt(x.split("-")[0])).reduce(add,0);
+  team2scores=sets.map((x)=>parseInt(x.split("-")[1])).reduce(add,0);
+
+  team1Win=sets.map((x)=> parseInt(x.split("-")[0]) > parseInt(x.split("-")[1])).reduce(add)>1;
+  
+  actual=pti1_actual(team1Win,team1scores,team2scores);
+  adjustment=pti1_adjustment(expected,actual);
+
+  actual_match={x: team1scores, y:adjustment, name:'Actual',label:'Actual'};
+
+  console.log(team1Win);
+  console.log(team1scores);
+  console.log(team2scores);
+}
+
+function updateIntermediate() {
+  results=pti2_adjustment();
+  if (results.length>0) {
+    console.log("Results");
+    console.log(results);
+    
+    before=results[0];
+    after=results[1];
+
+    $('#lblSpread').text("Spread: " + ( players_list[0].Perf+players_list[1].Perf-players_list[2].Perf-players_list[3].Perf).toFixed(2));
+    $('#lblAdjustment').text("Adjustment: " + (PerfvolatityTOpti2rating(before[0])-PerfvolatityTOpti2rating(after[0])).toFixed(2) );
+
+    console.log("Updating Data")
+    //Ratings
+    $('#PlayerRating').text(PerfvolatityTOpti2rating(before[0]).toFixed(2));
+    $('#PlayerAdjRating').text(PerfvolatityTOpti2rating(after[0]).toFixed(2));
+
+    $('#PartnerRating').text(PerfvolatityTOpti2rating(before[1]).toFixed(2));
+    $('#PartnerAdjRating').text(PerfvolatityTOpti2rating(after[1]).toFixed(2));
+
+    $('#Opp1Rating').text(PerfvolatityTOpti2rating(before[2]).toFixed(2));
+    $('#Opp1AdjRating').text(PerfvolatityTOpti2rating(after[2]).toFixed(2));
+
+    $('#Opp2Rating').text(PerfvolatityTOpti2rating(before[3]).toFixed(2));
+    $('#Opp2AdjRating').text(PerfvolatityTOpti2rating(after[3]).toFixed(2));
+
+    // Skill/Perf
+    $('#PlayerPerf').text(before[0].Perf.toFixed(2));
+    $('#PlayerAdjPerf').text(after[0].Perf.toFixed(2));
+
+    $('#PartnerPerf').text(before[1].Perf.toFixed(2));
+    $('#PartnerAdjPerf').text(after[1].Perf.toFixed(2));
+
+    $('#Opp1Perf').text(before[2].Perf.toFixed(2));
+    $('#Opp1AdjPerf').text(after[2].Perf.toFixed(2));
+
+    $('#Opp2Perf').text(before[3].Perf.toFixed(2));
+    $('#Opp2AdjPerf').text(after[3].Perf.toFixed(2));
+
+    //Sigmas
+
+    $('#PlayerVol').text(before[0].Volatility.toFixed(2));
+    $('#PlayerAdjVol').text(after[0].Volatility.toFixed(2));
+
+    $('#PartnerVol').text(before[1].Volatility.toFixed(2));
+    $('#PartnerAdjVol').text(after[1].Volatility.toFixed(2));
+
+    $('#Opp1Vol').text(before[2].Volatility.toFixed(2));
+    $('#Opp1AdjVol').text(after[2].Volatility.toFixed(2));
+
+    $('#Opp2Vol').text(before[3].Volatility.toFixed(2));
+    $('#Opp2AdjVol').text(after[3].Volatility.toFixed(2));
+
+  }
+
+}
+      
+    </script>
+
+  </body>
+    </html>
