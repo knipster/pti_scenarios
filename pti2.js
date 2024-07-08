@@ -20,42 +20,49 @@ function PerfvolatityTOpti2rating(p1) {
 
 
 function update_pti2_ratings(player_list, set_list) {
-        P1=structuredClone(player_list[0]);
-        P2=structuredClone(player_list[1]);
-        P3=structuredClone(player_list[2]);
-        P4=structuredClone(player_list[3]);
+        var P1=structuredClone(player_list[0]); //DeepCopys
+        var P2=structuredClone(player_list[1]);
+        var P3=structuredClone(player_list[2]);
+        var P4=structuredClone(player_list[3]);
 
         set_list.forEach((Match_set) => {
 
             var WINNER = Match_set[0]; //# 0 if Team 1, 1 if Team 2
 
 
-            // Demian Question: is this correct?  GAME_PCT is Winner's percent 
+           
             var GAME_PCT = Match_set[1]; // # set winner % of games won
 
             var T1 = [P1, P2];
             var T2 = [P3, P4];
 
-            Teams = [T1, T2];
+            var Teams = [T1, T2];
 
-            T1Perf = P1['Perf'] + P2['Perf'];
-            T2Perf = P3['Perf'] + P4['Perf'];
-            T1Variance = P1['Volatility'] ** 2 + P2['Volatility'] ** 2;
-            T2Variance = P3['Volatility'] ** 2 + P4['Volatility'] ** 2;
+            // Add Tau Impact to Player Volatility:  Assume Volatility Increases unless results say otherwise
 
-            CIQ = (P1['Volatility'] ** 2 + P2['Volatility'] ** 2 + P3['Volatility'] ** 2 +  P4['Volatility'] ** 2 + TWO_BETA_SQUARED) ** 0.5;
-            Gamescale = Math.min(Math.max((2 * GAME_PCT) - 0.3, 0.7), 1.7);
+            P1['Volatility']=Math.sqrt(TAU**2 + P1['Volatility']**2);
+            P2['Volatility']=Math.sqrt(TAU**2 + P2['Volatility']**2);
+            P3['Volatility']=Math.sqrt(TAU**2 + P3['Volatility']**2);
+            P4['Volatility']=Math.sqrt(TAU**2 + P4['Volatility']**2);
 
-            T1_SSTC = T1Variance / CIQ;
-            T1_SSTC = T1_SSTC * Gamescale;
-            T1_PIQ = 1 / (1 + e ** ((T2Perf - T1Perf) / CIQ));
+            var T1Perf = P1['Perf'] + P2['Perf'];
+            var T2Perf = P3['Perf'] + P4['Perf'];
+            var T1Variance = P1['Volatility'] ** 2 + P2['Volatility'] ** 2;  //Add Tau
+            var T2Variance = P3['Volatility'] ** 2 + P4['Volatility'] ** 2;  //Add Tau
+
+            var CIQ = (P1['Volatility'] ** 2 + P2['Volatility'] ** 2 + P3['Volatility'] ** 2 +  P4['Volatility'] ** 2 + TWO_BETA_SQUARED) ** 0.5;
+            var Gamescale = Math.min(Math.max((2 * GAME_PCT) - 0.3, 0.7), 1.7);
+
+            var T1_SSTC = T1Variance / CIQ;
+            var T1_SSTC = T1_SSTC * Gamescale;
+            var T1_PIQ = 1 / (1 + e ** ((T2Perf - T1Perf) / CIQ));
 
             //Skill Update Calcs
-            T1_Omega = T1_SSTC * (WINNER - T1_PIQ);
+            var T1_Omega = T1_SSTC * (WINNER - T1_PIQ);
 
             //Volatility Update Calcs
-            T1_GAMMA=Math.sqrt(T1Variance)/CIQ
-            T1_DELTA=((T1_GAMMA*T1_SSTC)/CIQ)*T1_PIQ*(1-T1_PIQ); 
+            var T1_GAMMA=Math.sqrt(T1Variance)/CIQ
+            var T1_DELTA=((T1_GAMMA*T1_SSTC)/CIQ)*T1_PIQ*(1-T1_PIQ); 
 
             // Player Skill Updates
             P1['Perf'] = P1['Perf'] + ((P1['Volatility'] ** 2 / T1Variance) * T1_Omega);
@@ -67,16 +74,16 @@ function update_pti2_ratings(player_list, set_list) {
             
 
 
-            T2_SSTC = T2Variance / CIQ;
-            T2_SSTC = T2_SSTC * Gamescale;
-            T2_PIQ = 1 / (1 + e ** ((T1Perf - T2Perf) / CIQ));
+            var T2_SSTC = T2Variance / CIQ;
+            var T2_SSTC = T2_SSTC * Gamescale;
+            var T2_PIQ = 1 / (1 + e ** ((T1Perf - T2Perf) / CIQ));
 
             //Skill Update Calcs
-            T2_Omega = T2_SSTC * ((1-WINNER) - T2_PIQ);
+            var T2_Omega = T2_SSTC * ((1-WINNER) - T2_PIQ);
 
             //Volatility Update Calcs
-            T2_GAMMA=Math.sqrt(T2Variance)/CIQ;
-            T2_DELTA=((T2_GAMMA*T2_SSTC)/CIQ)*T2_PIQ*(1-T2_PIQ); 
+            var T2_GAMMA=Math.sqrt(T2Variance)/CIQ;
+            var T2_DELTA=((T2_GAMMA*T2_SSTC)/CIQ)*T2_PIQ*(1-T2_PIQ); 
             
 
             P3['Perf'] = P3['Perf'] + ((P3['Volatility'] ** 2 / T2Variance) * T2_Omega);
