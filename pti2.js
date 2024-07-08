@@ -49,17 +49,43 @@ function update_pti2_ratings(player_list, set_list) {
             T1_SSTC = T1Variance / CIQ;
             T1_SSTC = T1_SSTC * Gamescale;
             T1_PIQ = 1 / (1 + e ** ((T2Perf - T1Perf) / CIQ));
+
+            //Skill Update Calcs
             T1_Omega = T1_SSTC * (WINNER - T1_PIQ);
+
+            //Volatility Update Calcs
+            T1_GAMMA=T1Variance/CIQ
+            T1_DELTA=((T1_GAMMA*T1_SSTC)/CIQ)*T1_PIQ*(1-T1_PIQ); 
+
+            // Player Skill Updates
             P1['Perf'] = P1['Perf'] + ((P1['Volatility'] ** 2 / T1Variance) * T1_Omega);
             P2['Perf'] = P2['Perf'] + ((P2['Volatility'] ** 2 / T1Variance) * T1_Omega);
+            
+            // Player Volatility Update
+            P1['Volatility'] *= Math.sqrt(Math.max(EPSILON,1-(P1['Volatility']**2/T1Variance)*T1_DELTA))
+            P2['Volatility'] *= Math.sqrt(Math.max(EPSILON,1-(P2['Volatility']**2/T1Variance)*T1_DELTA))
+            
 
 
             T2_SSTC = T2Variance / CIQ;
             T2_SSTC = T2_SSTC * Gamescale;
             T2_PIQ = 1 / (1 + e ** ((T1Perf - T2Perf) / CIQ));
+
+            //Skill Update Calcs
             T2_Omega = T2_SSTC * ((1-WINNER) - T2_PIQ);
+
+            //Volatility Update Calcs
+            T2_GAMMA=T2Variance/CIQ;
+            T2_DELTA=((T2_GAMMA*T2_SSTC)/CIQ)*T2_PIQ*(1-T2_PIQ); 
+            
+
             P3['Perf'] = P3['Perf'] + ((P3['Volatility'] ** 2 / T2Variance) * T2_Omega);
             P4['Perf'] = P4['Perf'] + ((P4['Volatility'] ** 2 / T2Variance) * T2_Omega);
+
+            // Player Volatility Update
+            P3['Volatility'] *= Math.sqrt(Math.max(EPSILON,1-(P3['Volatility']**2/T2Variance)*T2_DELTA))
+            P4['Volatility'] *= Math.sqrt(Math.max(EPSILON,1-(P4['Volatility']**2/T2Variance)*T2_DELTA))
+            
 
         });
 
