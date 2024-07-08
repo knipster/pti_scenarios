@@ -54,7 +54,7 @@ function update_pti2_ratings(player_list, set_list) {
             T1_Omega = T1_SSTC * (WINNER - T1_PIQ);
 
             //Volatility Update Calcs
-            T1_GAMMA=T1Variance/CIQ
+            T1_GAMMA=Math.sqrt(T1Variance)/CIQ
             T1_DELTA=((T1_GAMMA*T1_SSTC)/CIQ)*T1_PIQ*(1-T1_PIQ); 
 
             // Player Skill Updates
@@ -75,7 +75,7 @@ function update_pti2_ratings(player_list, set_list) {
             T2_Omega = T2_SSTC * ((1-WINNER) - T2_PIQ);
 
             //Volatility Update Calcs
-            T2_GAMMA=T2Variance/CIQ;
+            T2_GAMMA=Math.sqrt(T2Variance)/CIQ;
             T2_DELTA=((T2_GAMMA*T2_SSTC)/CIQ)*T2_PIQ*(1-T2_PIQ); 
             
 
