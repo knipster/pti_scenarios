@@ -315,6 +315,9 @@ function update_sets() {
         t1score=parseInt(games[0]);
         t2score=parseInt(games[1]);
         gamepct=Math.max(t1score,t2score)/(t1score+t2score);
+        if ( (t1score+t2score) <=1 ) {
+          gamepct=.54;
+        }
         winner= (t1score>t2score)?0:1;
 
         return [winner,gamepct]
