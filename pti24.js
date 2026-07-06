@@ -23,7 +23,7 @@ function true_rank(mu, sigma) {
 }
 
 function ratingsigmaTOPerfvolatility24(rating,sigma){
-    rvalue={'Perf': rating , 'Volatility':time_decay(rating,sigma)};
+    rvalue={'Perf': (rating-4.87)/.851 , 'Volatility':time_decay(rating,sigma)};
 
 
     return rvalue;
