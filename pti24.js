@@ -1,6 +1,6 @@
 var ETA = 4;
 var EPSILON = 0.0001;
-var TAU = 0.35;
+var TAU = 0.012565086385508734,;
 var e = 2.7182818285;
 
 var TWO_BETA_SQUARED = 32;
@@ -35,7 +35,7 @@ function PerfvolatityTOpti2rating24(p1) {
 
 
 
-function speedrate_js(P1M, P1V, P2M, P2V, P3M, P3V, P4M, P4V, two_beta_squared = 32.0, tau = 0.26, game_pct = 1, scorescale = 3.3, surpfac = 1.33) {
+function speedrate_js(P1M, P1V, P2M, P2V, P3M, P3V, P4M, P4V, two_beta_squared = 32.0, tau = TAU, game_pct = 1, scorescale = 3.3, surpfac = 1.33) {
     // Adding tau factor to the volatility of each player prior to match
     // Represents added uncertainty since last match
     P1V = Math.sqrt(tau ** 2 + P1V ** 2);
