@@ -35,7 +35,7 @@ function PerfvolatityTOpti2rating24(p1) {
 
 
 
-function speedrate_js(P1M, P1V, P2M, P2V, P3M, P3V, P4M, P4V, two_beta_squared = 32.0, tau = TAU, game_pct = 1, scorescale = 3.3, surpfac = 1.33) {
+function speedrate_js(P1M, P1V, P2M, P2V, P3M, P3V, P4M, P4V, two_beta_squared = 32.0, tau = TAU, game_pct = 1, scorescale = 4.820362954958707, surpfac = 1.005368928469052) {
     // Adding tau factor to the volatility of each player prior to match
     // Represents added uncertainty since last match
     P1V = Math.sqrt(tau ** 2 + P1V ** 2);
@@ -121,7 +121,7 @@ function speedrate_js(P1M, P1V, P2M, P2V, P3M, P3V, P4M, P4V, two_beta_squared =
 
 function update_pti24_ratings(input_player_list, set_list) {
     if (!set_list || set_list.length === 0) {
-        return player_list;
+        return structuredClone(input_player_list);
     } 
     var player_list = structuredClone(input_player_list); // Deep copy to avoid mutating original list
     set_list.forEach((Match_set) => {
@@ -144,7 +144,7 @@ function update_pti24_ratings(input_player_list, set_list) {
             losing[1]['Perf'], losing[1]['Volatility'],
             winning[0]['Perf'], winning[0]['Volatility'],
             winning[1]['Perf'], winning[1]['Volatility'],
-            TWO_BETA_SQUARED, TAU, GAME_PCT, 3.3, 1.33
+            TWO_BETA_SQUARED, TAU, GAME_PCT, scorescale, surpfac
         );
 
         losing[0]['Perf'] = updated[0][0];
