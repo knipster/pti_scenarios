@@ -1007,6 +1007,14 @@
       if (params.exp2) setExperienceFromVal('Partner', params.exp2);
       if (params.oppexp1) setExperienceFromVal('Opp1', params.oppexp1);
       if (params.oppexp2) setExperienceFromVal('Opp2', params.oppexp2);
+
+      // Score: URL hash first, then ?score= query string, then localStorage
+      var score = params.score;
+      if (!score) score = new URLSearchParams(window.location.search).get('score');
+      if (!score) {
+        try { score = localStorage.getItem('matchScore'); } catch (e) {}
+      }
+      if (score) $('#matchScore').val(score);
     }
 
     // Helper to determine if a score string represents a Team 1 win
@@ -1039,6 +1047,7 @@
         actual = "";
         adjustment = "";
         set_list = [];
+        savePTI();
         updateIntermediate();
         return;
       }
@@ -1069,6 +1078,7 @@
       });
 
       set_list = parsedSets;
+      savePTI();
       updateIntermediate();
     }
 
@@ -1095,8 +1105,14 @@
       var oppexp1 = getSigmaValue('Opp1');
       var oppexp2 = getSigmaValue('Opp2');
 
+      // Spaces dropped and commas left readable, e.g. score=6-4,4-6,6-3
+      var score = $('#matchScore').val().replace(/\s+/g, '');
+
       var hashStr = '#pti1=' + pti1 + '&pti2=' + pti2 + '&opp1=' + opp1 + '&opp2=' + opp2 +
-                    '&exp1=' + exp1 + '&exp2=' + exp2 + '&oppexp1=' + oppexp1 + '&oppexp2=' + oppexp2;
+                    '&exp1=' + exp1 + '&exp2=' + exp2 + '&oppexp1=' + oppexp1 + '&oppexp2=' + oppexp2 +
+                    '&score=' + encodeURIComponent(score).replace(/%2C/gi, ',');
+
+      try { localStorage.setItem('matchScore', $('#matchScore').val()); } catch (e) {}
 
       if (window.history && window.history.replaceState) {
         window.history.replaceState(null, null, hashStr);
