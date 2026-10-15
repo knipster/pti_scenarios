@@ -230,8 +230,9 @@
         <div class="flex gap-2 flex-wrap">
           <button id="resetStartsBtn" type="button" class="btn">Reset starting ratings</button>
           <button id="clearBreaksBtn" type="button" class="btn">Remove all breaks</button>
-          <button id="downloadBtn" type="button" class="btn">Download results CSV</button>
-          <button id="downloadStartsBtn" type="button" class="btn">Download starting ratings CSV</button>
+          <!-- Hidden for now; run showDownloads() in the browser console to show them -->
+          <button id="downloadBtn" type="button" class="btn" style="display:none">Download results CSV</button>
+          <button id="downloadStartsBtn" type="button" class="btn" style="display:none">Download starting ratings CSV</button>
           <span id="perf" class="text-xs muted self-center" role="status"></span>
         </div>
       </div>
@@ -1362,6 +1363,10 @@
     });
     $('downloadBtn').addEventListener('click', downloadResults);
     $('downloadStartsBtn').addEventListener('click', downloadStarts);
+    // The download buttons are hidden for now; showDownloads() (or showDownloads(false)) from the console toggles them
+    window.showDownloads = function (on) {
+      ['downloadBtn', 'downloadStartsBtn'].forEach(function (id) { $(id).style.display = on === false ? 'none' : ''; });
+    };
 
     $('playerSearch').addEventListener('input', function () { S.search = this.value; renderPlayers(); });
     $('matchSearch').addEventListener('input', function () { S.matchSearch = this.value; renderMatches(); });
