@@ -47,6 +47,9 @@
     html:not(.dark) .section-head { background: #f1f5f9; border-color: #e2e8f0; }
     html.dark header { background: rgba(17,24,39,.6); border-color: #1f2937; }
     html:not(.dark) header { background: #ffffff; border-color: #e2e8f0; }
+    /* Small screens: the header slides away while scrolling down (or using the chart) and comes back on scroll up */
+    header { transition: transform .25s ease; }
+    @media (max-width: 767px), (max-height: 500px) { header.tucked { transform: translateY(-100%); } }
 
     .field {
       width: 100%; border-radius: .5rem; padding: .45rem .65rem; font-size: .8125rem;
@@ -1230,8 +1233,29 @@
     });
   }
 
+  function wireHeader() {
+    var h = document.querySelector('header'), small = window.matchMedia('(max-width: 767px), (max-height: 500px)');
+    var lastY = window.scrollY, ticking = false;
+    function tuck(on) { h.classList.toggle('tucked', on && small.matches); }
+    window.addEventListener('scroll', function () {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(function () {
+        var y = window.scrollY, dy = y - lastY;
+        if (y < h.offsetHeight) tuck(false);         // back at the top
+        else if (dy > 6) tuck(true);                 // scrolling down
+        else if (dy < -6) tuck(false);               // scrolling up
+        if (Math.abs(dy) > 6 || y < h.offsetHeight) lastY = y;
+        ticking = false;
+      });
+    }, { passive: true });
+    // Touching the chart also gets the header out of the way
+    $('chart').addEventListener('pointerdown', function () { if (window.scrollY > 0) tuck(true); });
+    small.addEventListener && small.addEventListener('change', function () { if (!small.matches) tuck(false); });
+  }
+
   function init() {
-    wireDrop('ratings'); wireDrop('matches'); wireShare();
+    wireDrop('ratings'); wireDrop('matches'); wireShare(); wireHeader();
     $('loadUrlsBtn').addEventListener('click', function () { loadUrls($('ratingsUrl').value.trim(), $('matchesUrl').value.trim()); });
     $('sampleBtn').addEventListener('click', function () {
       S.ratingsText = SAMPLE_RATINGS; S.matchesText = SAMPLE_MATCHES;
