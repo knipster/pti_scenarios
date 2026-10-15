@@ -1,4 +1,4 @@
-# Publish the calculator site to the Linode (Akamai) Object Storage bucket
+# Publish the calculator site (with calculator2.html as the home page) to the Linode (Akamai) Object Storage bucket
 # that serves calc.platform.tennis.
 #
 # Runs on every push to main, and on demand from the Actions tab
@@ -76,13 +76,22 @@ jobs:
           args=(--acl public-read --no-progress
                 --cache-control "public, max-age=300, must-revalidate"
                 --exclude ".git/*" --exclude ".github/*" --exclude ".gitignore"
-                --exclude ".claude/*" --exclude "CLAUDE.md" --exclude "README.md")
+                --exclude ".claude/*" --exclude "CLAUDE.md" --exclude "README.md"
+                # index.html is uploaded separately below; excluding it here also
+                # keeps --delete from removing it.
+                --exclude "index.html")
           [ "$DRY_RUN" = 1 ] && args+=(--dryrun) && echo "DRY RUN: nothing will change."
           [ "$DELETE" = 1 ] && args+=(--delete)
           # A fresh checkout gives every file a new mtime, so each run re-uploads
           # the whole (small) site. That's deliberate: --size-only would miss
           # edits that leave a file the same length.
           aws --endpoint-url "$ENDPOINT" s3 sync . "s3://$BUCKET" "${args[@]}"
+
+          # Serve calculator2.html as the site's home page.
+          cp_args=(--acl public-read --no-progress --content-type "text/html"
+                   --cache-control "public, max-age=300, must-revalidate")
+          [ "$DRY_RUN" = 1 ] && cp_args+=(--dryrun)
+          aws --endpoint-url "$ENDPOINT" s3 cp calculator2.html "s3://$BUCKET/index.html" "${cp_args[@]}"
 
           cluster="$(echo "$ENDPOINT" | sed -E 's#^https://##; s#\.linodeobjects\.com/?$##')"
           echo "Website URL: http://$BUCKET.website-$cluster.linodeobjects.com" >> "$GITHUB_STEP_SUMMARY"
