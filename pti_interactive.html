@@ -223,7 +223,7 @@
           <span class="text-sm font-semibold uppercase tracking-wider">Players <span id="selCount" class="muted normal-case font-normal"></span></span>
           <div class="flex items-center gap-2">
             <input id="playerSearch" class="field" style="max-width: 14rem" placeholder="Search players">
-            <button id="linkShownBtn" type="button" class="btn" title="Treat the shown players' ids as one player">Link shown</button>
+            <button id="linkShownBtn" type="button" class="btn" title="Link the shown players into one group (or add them to the one group already shown)">Link shown</button>
             <button id="clearShownBtn" type="button" class="btn" title="Hide every player from the chart">Clear shown</button>
           </div>
         </div>
@@ -252,6 +252,13 @@
       <section class="section border rounded-2xl overflow-hidden">
         <div class="section-head px-5 py-3.5 border-b">
           <span class="text-sm font-semibold uppercase tracking-wider">Linked players</span>
+        </div>
+        <div class="px-4 pt-4 text-sm">
+          <div class="flex gap-2">
+            <input id="linkIds" class="field" placeholder="Player ids, e.g. 1001, 1002" aria-label="Player ids to link as a new group">
+            <button id="linkIdsBtn" type="button" class="btn" title="Link these ids as a new group">New group</button>
+          </div>
+          <p id="linkMsg" class="text-xs mt-1" role="status"></p>
         </div>
         <div id="linksList" class="p-4 space-y-2 max-h-[28rem] overflow-auto text-sm"></div>
       </section>
@@ -932,10 +939,54 @@
     setPerf(res);
     renderAll();
   }
+  function linkMsg(msg, bad) { var el = $('linkMsg'); el.textContent = msg || ''; el.style.color = bad ? '#f43f5e' : ''; }
+  // Ids (or exact names) typed by the user -> player indexes
+  function parseIds(text) {
+    var e = S.eng, out = [], missing = [];
+    text.split(/[\s,;]+/).filter(Boolean).forEach(function (t) {
+      var i = e.index.get(t);
+      if (i === undefined) {
+        var lc = t.toLowerCase(), hits = [];
+        for (var j = 0; j < S.players.length && hits.length < 2; j++) if (S.players[j].name.toLowerCase() === lc) hits.push(j);
+        if (hits.length === 1) i = hits[0];
+      }
+      if (i === undefined) missing.push(t); else if (out.indexOf(i) < 0) out.push(i);
+    });
+    return { ids: out, missing: missing };
+  }
+  // Link ids into one group. Groups stay separate: an id that already belongs
+  // to a different group has to be unlinked from it first.
+  // extend: allow joining the one existing group among ids (Link shown)
+  function linkInto(ids, root, extend) {
+    var e = S.eng, t = performance.now(), n = 0;
+    var target = root != null ? e.root[root] : null;
+    for (var j = 0; j < ids.length; j++) {
+      var r = e.root[ids[j]];
+      if (!S.groups[r] || r === target) continue;
+      if (target == null && extend) { target = r; continue; }
+      linkMsg(S.players[ids[j]].id + ' is already in the group for ' + nameOf(r) + '. ' +
+        (target == null ? 'Use Add on that group, or unlink it first.' : 'Unlink it there first.'), true);
+      return false;
+    }
+    var all = (target != null ? [target] : []).concat(ids);
+    if (all.length < 2) { linkMsg('Give at least two player ids.', true); return false; }
+    for (j = 1; j < all.length; j++) n += e.link(all[0], all[j]).recalculated;
+    linkMsg('');
+    afterLinkChange({ recalculated: n, ms: performance.now() - t });
+    return true;
+  }
   function linkShown() {
-    var e = S.eng, sel = S.selected.slice(), t = performance.now(), n = 0;
-    if (!e || sel.length < 2) return;
-    for (var j = 1; j < sel.length; j++) n += e.link(sel[0], sel[j]).recalculated;
+    if (S.eng && S.selected.length >= 2) linkInto(S.selected.slice(), null, true);
+  }
+  function linkTyped(input, root) {
+    if (!S.eng) return;
+    var r = parseIds(input.value);
+    if (r.missing.length) { linkMsg('Not found: ' + r.missing.join(', '), true); return; }
+    if (linkInto(r.ids, root)) input.value = '';
+  }
+  function unlinkGroup(r) {
+    var e = S.eng, t = performance.now(), n = 0;
+    S.groups[r].slice(1).forEach(function (i) { n += e.unlink(i).recalculated; });
     afterLinkChange({ recalculated: n, ms: performance.now() - t });
   }
   function unlinkId(i) {
@@ -948,20 +999,23 @@
   function renderLinks() {
     var el = $('linksList'), e = S.eng, roots = Object.keys(S.groups);
     if (!e || !roots.length) {
-      el.innerHTML = '<p class="muted text-xs">No linked players. Show two or more players and click <b>Link shown</b> to treat their ids as one player. The id with the earliest match keeps its starting PTI and sigma.</p>';
+      el.innerHTML = '<p class="muted text-xs">No linked players. Type two or more ids above and click <b>New group</b>, or show the players on the chart and click <b>Link shown</b>. Each group is one player: the id with the earliest match keeps its starting PTI and sigma.</p>';
       return;
     }
     el.innerHTML = roots.map(function (r) {
       var g = S.groups[r];
-      return '<div class="glass-card rounded-xl p-3">' +
-        '<div class="font-medium mb-1">' + (S.slot[r] != null ? '<span class="chip" style="background:' + colorOf(+r) + '"></span> ' : '') + esc(nameOf(+r)) +
-        ' <span class="muted text-xs font-normal">' + num(e.count[r]) + ' matches</span></div>' +
+      return '<div class="glass-card rounded-xl p-3" data-root="' + r + '">' +
+        '<div class="flex items-center justify-between gap-2 mb-1"><span class="font-medium">' + (S.slot[r] != null ? '<span class="chip" style="background:' + colorOf(+r) + '"></span> ' : '') + esc(nameOf(+r)) +
+        ' <span class="muted text-xs font-normal">' + g.length + ' ids • ' + num(e.count[r]) + ' matches</span></span>' +
+        '<button type="button" class="btn unlink-all" title="Unlink every id in this group">Unlink all</button></div>' +
         g.map(function (i, j) {
           var p = S.players[i];
           return '<div class="flex items-center justify-between gap-2 text-xs py-0.5"><span>' + esc(p.name) + (p.name !== p.id ? ' <span class="muted">' + esc(p.id) + '</span>' : '') +
             (j === 0 ? ' <span class="muted">• start ' + fmt(e.initPti[i]) + ' / σ ' + fmt(e.initSigma[i]) + '</span>' : '') +
             '</span><button type="button" class="btn unlink" data-i="' + i + '" title="Give this id its own history again">Unlink</button></div>';
-        }).join('') + '</div>';
+        }).join('') +
+        '<div class="flex gap-2 mt-2"><input class="field field-sm add-ids" placeholder="Add ids" aria-label="Ids to add to this group">' +
+        '<button type="button" class="btn add-btn">Add</button></div></div>';
     }).join('');
   }
 
@@ -1062,8 +1116,19 @@
     $('playerSearch').addEventListener('input', function () { S.search = this.value; renderPlayers(); });
     $('linkShownBtn').addEventListener('click', linkShown);
     $('linksList').addEventListener('click', function (e) {
-      var b = e.target.closest('button.unlink'); if (b) unlinkId(+b.getAttribute('data-i'));
+      var b = e.target.closest('button'), card = e.target.closest('[data-root]');
+      if (!b || !card) return;
+      var r = +card.getAttribute('data-root');
+      if (b.classList.contains('unlink')) unlinkId(+b.getAttribute('data-i'));
+      else if (b.classList.contains('unlink-all')) unlinkGroup(r);
+      else if (b.classList.contains('add-btn')) linkTyped(card.querySelector('.add-ids'), r);
     });
+    $('linksList').addEventListener('keydown', function (e) {
+      var card = e.target.closest('[data-root]');
+      if (e.key === 'Enter' && card && e.target.classList.contains('add-ids')) linkTyped(e.target, +card.getAttribute('data-root'));
+    });
+    $('linkIdsBtn').addEventListener('click', function () { linkTyped($('linkIds'), null); });
+    $('linkIds').addEventListener('keydown', function (e) { if (e.key === 'Enter') linkTyped($('linkIds'), null); });
     $('clearShownBtn').addEventListener('click', function () { S.selected = []; S.slot = {}; if (S.eng) renderAll(); });
     Array.prototype.forEach.call(document.querySelectorAll('#playersHead th.sortable'), function (th) {
       th.tabIndex = 0;
