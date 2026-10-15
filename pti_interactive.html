@@ -251,7 +251,7 @@
               <th class="sortable" data-sort="show">Show</th><th class="sortable" data-sort="name">Player</th><th class="num sortable" data-sort="matches">Matches</th>
               <th class="num sortable" data-sort="startPti">Start PTI</th><th class="num sortable" data-sort="startSigma">Start sigma</th>
               <th class="num sortable" data-sort="nowPti">Now PTI</th><th class="num sortable" data-sort="change">Change</th><th class="num sortable" data-sort="nowSigma">Now sigma</th>
-              <th class="num sortable" data-sort="deltaOrig" title="Now PTI minus the PTI in the history as loaded (see Show original)">Δ Original</th>
+              <th class="num sortable" data-sort="deltaOrig" title="PTI in the history as loaded (see Show original) minus Now PTI">Δ Original</th>
             </tr></thead>
             <tbody id="playersBody"></tbody>
           </table>
@@ -852,10 +852,10 @@
         });
     return (S.sortOrder = order);
   }
-  // Current PTI minus the PTI as loaded (the end of the "Show original" line)
+  // PTI as loaded (the end of the "Show original" line) minus current PTI
   function deltaOrig(i) {
     var e = S.eng, pos = e.origLast[i];
-    return e.currentPti(i) - (pos >= 0 ? S.orig.pti[pos] : S.orig.init[i]);
+    return (pos >= 0 ? S.orig.pti[pos] : S.orig.init[i]) - e.currentPti(i);
   }
   function deltaCell(i, merged) {
     var d = merged ? 0 : deltaOrig(i);
