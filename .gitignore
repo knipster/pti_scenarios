@@ -1,0 +1,4 @@
+# Password-shared data (tools/pti-share.mjs): never commit
+pti-share-secret*.json
+share-out/
+d/
