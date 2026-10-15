@@ -209,7 +209,10 @@
     <!-- Chart -->
     <section class="section border rounded-2xl overflow-hidden">
       <div class="section-head px-5 py-3.5 border-b flex items-center justify-between gap-3 flex-wrap">
-        <span class="text-sm font-semibold uppercase tracking-wider">Ratings over time</span>
+        <div>
+          <div class="text-sm font-semibold uppercase tracking-wider">Ratings over time</div>
+          <div id="accuracy" class="text-xs muted mt-0.5" title="Share of rated, included matches won by the team with the lower combined PTI going into the match. In parentheses: the same matches scored with the ratings as originally loaded. Drawn sets and level team ratings are skipped."></div>
+        </div>
         <div class="flex items-center gap-2 flex-wrap">
           <div class="seg" id="metricSeg"><button data-v="Pti" class="on">PTI</button><button data-v="Sigma">Sigma</button></div>
           <div class="seg" id="xSeg"><button data-v="index" class="on">By match #</button><button data-v="date">By date</button></div>
@@ -1107,7 +1110,20 @@
     }).join('');
   }
 
-  function renderAll() { refreshChart(); renderPlayers(); renderBreaks(); renderLinks(); renderMatches(); }
+  function pct(c) { return c.n ? (100 * c.won / c.n).toFixed(1) + '%' : '–'; }
+  // Scans every match (~0.1 s at 700k), so it runs just after the rest has drawn
+  var accTimer = 0;
+  function renderAccuracy() {
+    clearTimeout(accTimer);
+    accTimer = setTimeout(drawAccuracy, 0);
+  }
+  function drawAccuracy() {
+    var el = $('accuracy');
+    if (!S.eng) { el.textContent = ''; return; }
+    var a = S.eng.predictive(S.orig.pti, S.orig.init);
+    el.innerHTML = 'Predictive accuracy <b>' + pct(a.current) + '</b> (original ' + pct(a.original) + ') <span class="opacity-75">• ' + num(a.current.n) + ' matches</span>';
+  }
+  function renderAll() { renderAccuracy(); refreshChart(); renderPlayers(); renderBreaks(); renderLinks(); renderMatches(); }
 
   // ---------- Downloads ----------
   function csvCell(v) { v = v == null ? '' : typeof v === 'number' ? String(Math.round(v * 10000) / 10000) : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
@@ -1365,7 +1381,7 @@
       if (e.target.classList.contains('start-pti')) res = eng.setStart(i, v, eng.initSigma[i]);
       else if (e.target.classList.contains('start-sigma')) { if (v <= 0) return; res = eng.setStart(i, eng.initPti[i], v); }
       else return;
-      setPerf(res); refreshChart(); updatePlayerNumbers(); renderMatches();
+      setPerf(res); renderAccuracy(); refreshChart(); updatePlayerNumbers(); renderMatches();
     });
     var mth = document.querySelector('#matchesHead th[data-msort]');
     mth.tabIndex = 0;
@@ -1394,7 +1410,7 @@
       var o = S.overrides[+e.target.closest('[data-j]').getAttribute('data-j')], v = e.target.value.trim();
       var f = e.target.classList.contains('b-pti') ? 'pti' : 'sigma';
       if (v === '') delete o[f]; else if (!isNaN(parseFloat(v)) && !(f === 'sigma' && parseFloat(v) <= 0)) o[f] = parseFloat(v); else return;
-      setPerf(S.eng.setOverride(o.pos, o.pti, o.sigma)); refreshChart(); updatePlayerNumbers(); renderMatches();
+      setPerf(S.eng.setOverride(o.pos, o.pti, o.sigma)); renderAccuracy(); refreshChart(); updatePlayerNumbers(); renderMatches();
     });
 
     $('themeToggleBtn').addEventListener('click', function () {

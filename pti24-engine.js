@@ -458,6 +458,37 @@
   };
 
   // One match as a pti24History-style row
+  // Predictive accuracy: in how many rated matches the team with the lower
+  // summed pre-match PTI (the favourite) won. Matches with a level set count or
+  // level team ratings are skipped. With origEnd/origInit (endPti and initPti
+  // snapshotted after the first run) the same matches are also scored on the
+  // ratings as originally loaded.
+  P.predictive = function (origEnd, origInit) {
+    var cur = { won: 0, n: 0 }, orig = { won: 0, n: 0 };
+    var status = this.status, setOff = this.setOff, setWin = this.setWin, hasOv = this.hasOv;
+    var prev = this.prev, end = this.endPti, init = this.initPti, pl = this.pl, oPrev = this.origPrev, oPl = this.origPl;
+    for (var k = 0; k < this.n; k++) {
+      if (status[k] !== OK) continue;
+      var sets = 0;
+      for (var j = setOff[k]; j < setOff[k + 1]; j++) sets += setWin[j] === 1 ? 1 : -1;
+      if (!sets) continue;
+      var b = 4 * k, win = sets > 0 ? 1 : 2, t1 = 0, t2 = 0, o1 = 0, o2 = 0, s, pos, pv, v;
+      for (s = 0; s < 4; s++) {
+        pos = b + s;
+        if (hasOv[pos]) v = this.startPti(pos);
+        else { pv = prev[pos]; v = pv >= 0 ? end[pv] : init[pl[pos]]; }
+        if (s < 2) t1 += v; else t2 += v;
+        if (origEnd) {
+          pv = oPrev[pos]; v = pv >= 0 ? origEnd[pv] : origInit[oPl[pos]];
+          if (s < 2) o1 += v; else o2 += v;
+        }
+      }
+      if (t1 !== t2) { cur.n++; if ((t1 < t2 ? 1 : 2) === win) cur.won++; }
+      if (origEnd && o1 !== o2) { orig.n++; if ((o1 < o2 ? 1 : 2) === win) orig.won++; }
+    }
+    return { current: cur, original: orig };
+  };
+
   P.row = function (k) {
     var r = {
       date: this.dates[k], player1id: this.rawIds[0][k], player2id: this.rawIds[1][k],
