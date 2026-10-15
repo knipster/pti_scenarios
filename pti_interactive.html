@@ -288,7 +288,8 @@
     <section class="section border rounded-2xl overflow-hidden">
       <div class="section-head px-5 py-3.5 border-b flex items-center justify-between gap-3 flex-wrap">
         <span class="text-sm font-semibold uppercase tracking-wider">Matches for shown players</span>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 flex-wrap">
+          <input id="matchSearch" type="search" class="field" style="max-width: 14rem" placeholder="Filter by player" title="Only list matches with a player whose name or id contains this (as partner or opponent). Doesn't change the calculation." aria-label="Filter matches by player">
           <span id="matchesCount" class="text-xs muted"></span>
           <button id="includeAllBtn" type="button" class="btn" style="display: none" title="Put every excluded match back into the calculation">Include all</button>
         </div>
@@ -338,6 +339,7 @@
     showOrig: false,     // overlay the history as loaded
     orig: null,          // { pti, sigma } end values per position from the first run, before any edits
     search: '',
+    matchSearch: '',
     sort: { key: null, dir: 1 },  // players table sort; null keeps file order
     sortOrder: null,              // player indexes in sorted order, set when a header is clicked
     excluded: [],                 // match indexes left out of the calculation
@@ -973,9 +975,22 @@
         for (var s = 0; s < 4; s++) if (S.slot[e.pl[4 * k + s]] != null) { ks.add(k); break; }
       }
     }
-    var dir = S.matchDir;
-    var list = Array.from(ks).sort(function (a, b) { return (e.day[a] - e.day[b] || a - b) * dir; });
-    $('matchesCount').textContent = num(list.length) + ' matches' + (nEx ? ' (' + num(nEx) + ' excluded)' : '') +
+    var dir = S.matchDir, all = ks.size, list = Array.from(ks);
+    // Player filter (display only): keep matches with a partner or opponent whose name or id matches
+    var q = S.matchSearch.trim().toLowerCase();
+    if (q) {
+      var hitIds = new Uint8Array(e.np);
+      for (var i = 0; i < e.np; i++) {
+        var p = S.players[i];
+        if (p.id.toLowerCase().indexOf(q) >= 0 || p.name.toLowerCase().indexOf(q) >= 0) hitIds[i] = 1;
+      }
+      list = list.filter(function (k) {
+        var b = 4 * k;
+        return hitIds[e.origPl[b]] || hitIds[e.origPl[b + 1]] || hitIds[e.origPl[b + 2]] || hitIds[e.origPl[b + 3]];
+      });
+    }
+    list.sort(function (a, b) { return (e.day[a] - e.day[b] || a - b) * dir; });
+    $('matchesCount').textContent = (q ? num(list.length) + ' of ' + num(all) : num(list.length)) + ' matches' + (nEx ? ' (' + num(nEx) + ' excluded)' : '') +
       (list.length > MAX_MATCH_ROWS ? ', ' + (dir < 0 ? 'latest ' : 'earliest ') + MAX_MATCH_ROWS + ' shown' : '');
     body.innerHTML = list.slice(0, MAX_MATCH_ROWS).map(function (k) {
       var b = 4 * k, ex = e.isExcluded(k), clash = e.isClash(k);
@@ -1326,6 +1341,7 @@
     $('downloadStartsBtn').addEventListener('click', downloadStarts);
 
     $('playerSearch').addEventListener('input', function () { S.search = this.value; renderPlayers(); });
+    $('matchSearch').addEventListener('input', function () { S.matchSearch = this.value; renderMatches(); });
     $('linkShownBtn').addEventListener('click', linkShown);
     $('linksList').addEventListener('click', function (e) {
       var b = e.target.closest('button'), card = e.target.closest('[data-root]');
