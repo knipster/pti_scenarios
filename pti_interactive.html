@@ -71,6 +71,11 @@
     .btn-primary, html.dark .btn-primary, html:not(.dark) .btn-primary { background: #4f46e5; border-color: #4f46e5; color: #fff; }
     .btn-primary:hover, html.dark .btn-primary:hover, html:not(.dark) .btn-primary:hover { background: #4338ca; }
     .btn:disabled { opacity: .45; cursor: not-allowed; }
+    #dataSection.collapsed #dataBody { display: none; }
+    #dataSection.collapsed .section-head { border-bottom-width: 0; }
+    #dataSection:not(.collapsed) #dataSummary { display: none; }
+    #dataToggle .chev { transition: transform .2s; }
+    #dataSection.collapsed #dataToggle .chev { transform: rotate(-90deg); }
     #shareDlg { border-radius: 1rem; padding: 0; max-width: 22rem; width: calc(100% - 2rem); color: inherit; }
     html.dark #shareDlg { background: #111827; border: 1px solid #1f2937; }
     html:not(.dark) #shareDlg { background: #ffffff; border: 1px solid #e2e8f0; }
@@ -152,16 +157,22 @@
 
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-8">
 
-    <!-- Data -->
-    <section class="section border rounded-2xl overflow-hidden">
+    <!-- Data (collapses once data is loaded) -->
+    <section id="dataSection" class="section border rounded-2xl overflow-hidden">
       <div class="section-head px-5 py-3.5 border-b flex items-center justify-between gap-3 flex-wrap">
-        <span class="text-sm font-semibold uppercase tracking-wider">Data</span>
+        <div class="flex items-center gap-3 min-w-0">
+          <button id="dataToggle" type="button" class="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider" aria-expanded="true" aria-controls="dataBody" title="Show or hide the data files">
+            <svg class="chev w-4 h-4" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            Data
+          </button>
+          <span id="dataSummary" class="text-xs muted truncate"></span>
+        </div>
         <div class="flex gap-2 flex-wrap">
           <button id="sampleBtn" type="button" class="btn">Load sample data</button>
           <button id="formatBtn" type="button" class="btn">CSV format</button>
         </div>
       </div>
-      <div class="p-4 sm:p-5 space-y-4">
+      <div id="dataBody" class="p-4 sm:p-5 space-y-4">
         <div id="formatHelp" class="hidden glass-card rounded-xl p-4 text-xs leading-relaxed">
           <p class="mb-2"><b>Starting ratings</b>: one row per player. Columns <code>id, pti, sigma</code>; optional <code>name</code> and <code>lastPlayed</code> (date of their match before the history starts, for break days). If the sigma is an official "Start Sigma" it already includes time decay, so leave <code>lastPlayed</code> empty.</p>
           <p class="mb-2"><b>Matches</b>: one row per match, oldest first. Columns <code>date, player1id, player2id, player3id, player4id, score</code>. Players 1 and 2 are a team; the score is from their side, sets separated by commas (quote it), e.g. <code>"6-3, 4-6, 1-0"</code>. Dates as <code>YYYY-MM-DD</code> or <code>M/D/YYYY</code>.</p>
@@ -349,7 +360,15 @@
   function fmt(v, d) { return v == null || isNaN(v) ? '–' : (+v).toFixed(d == null ? 2 : d); }
   function num(n) { return n.toLocaleString('en-US'); }
   function secs(ms) { return ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(1) + ' s'; }
-  function setStatus(msg, bad) { var el = $('status'); el.textContent = msg; el.style.color = bad ? '#f43f5e' : ''; }
+  function setStatus(msg, bad) {
+    var el = $('status'); el.textContent = msg; el.style.color = bad ? '#f43f5e' : '';
+    $('dataSummary').textContent = msg;  // shown in the header while the section is collapsed
+    if (bad) setDataOpen(true);          // never hide a problem
+  }
+  function setDataOpen(open) {
+    $('dataSection').classList.toggle('collapsed', !open);
+    $('dataToggle').setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
   function setPerf(res) {
     if (!res) { $('perf').textContent = ''; return; }
     $('perf').textContent = 'Last change: ' + num(res.recalculated) + ' of ' + num(S.eng.n) + ' matches recalculated in ' + secs(res.ms);
@@ -477,6 +496,7 @@
           (r.bad ? '. ' + num(r.bad) + ' rating rows skipped' : '') + (unrated ? '. ' + num(unrated) + ' matches could not be rated' : '') + '.', false);
         setPerf(null);
         renderAll();
+        setDataOpen(false);  // data is in: give the room to the chart
       } catch (e) { setStatus(e.message, true); }
     }, 30);
   }
@@ -1263,7 +1283,8 @@
       $('ratingsDrop').classList.add('loaded'); $('matchesDrop').classList.add('loaded');
       tryBuild();
     });
-    $('formatBtn').addEventListener('click', function () { $('formatHelp').classList.toggle('hidden'); });
+    $('formatBtn').addEventListener('click', function () { setDataOpen(true); $('formatHelp').classList.toggle('hidden'); });
+    $('dataToggle').addEventListener('click', function () { setDataOpen($('dataSection').classList.contains('collapsed')); });
     segment('metricSeg', 'metric'); segment('xSeg', 'xMode'); segment('modeSeg', 'mode');
     $('invertChk').addEventListener('change', function () { S.invert = this.checked; refreshChart(); });
     $('origChk').addEventListener('change', function () { S.showOrig = this.checked; refreshChart(); });
