@@ -50,6 +50,38 @@ Test it: open `calc.platform.tennis/pti_interactive.html`, press Alt+Shift+P, en
 | See who has a password | `list` | |
 | Replace the CSVs | `update --ratings new.csv --matches new.csv` | Upload, then run the `aws s3 rm` lines it prints for the old files. Existing passwords keep working. |
 
+## Refresh the data from MotherDuck
+
+`tools/pti_share_sync.py` does the whole update in one step. It runs the "PTI full export" queries against `apta2.main.matches_unified` in MotherDuck, encrypts the two CSVs with the data key in your `pti-share-secret.json`, and uploads them to the bucket's `d/` folder. Existing passwords keep working, and the old data files are deleted from the bucket afterwards.
+
+You need Python 3.9 or newer and three packages:
+
+```sh
+python3 -m pip install duckdb boto3 cryptography
+```
+
+Set your MotherDuck token next to the bucket key from above (the script reads the same `AWS_*` and `LINODE_S3_ENDPOINT` variables):
+
+```sh
+export MOTHERDUCK_TOKEN=...             # app.motherduck.com > Settings > Access tokens
+```
+
+Then run it from the folder that holds `pti-share-secret.json`:
+
+```sh
+cd ~/pti-share
+python3 /path/to/pti_scenarios/tools/pti_share_sync.py --dry-run   # export and encrypt only, report the counts
+python3 /path/to/pti_scenarios/tools/pti_share_sync.py             # export, encrypt and upload
+```
+
+It prints the match and player counts (about 745,000 matches and 69,000 players for the whole table) and never prints the token, the keys or the passwords. Other options:
+
+- `--secret FILE` if the secret file is somewhere else.
+- `--from 2025-01-01 --to 2025-12-31` to share only a date range (inclusive, US Eastern), as in the dive.
+- `--keep-csv DIR` to also keep the plain CSVs. Keep them private.
+
+The upload goes data files first, then the manifest that points to them, so nobody opening the data mid-update gets a broken set. If the upload fails, the shared data and the secret file stay as they were. The script updates the file names in `pti-share-secret.json`, so keep using that same file for `add-password` and later runs. `init` still has to be run once with `pti-share.mjs` before the first sync.
+
 ## Good to know
 
 - Anyone with a passphrase can pass it on, or save the data once it's open. Cutting someone off only stops new downloads.

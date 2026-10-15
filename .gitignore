@@ -2,3 +2,4 @@
 pti-share-secret*.json
 share-out/
 d/
+__pycache__/
