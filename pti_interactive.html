@@ -853,8 +853,10 @@
     return (S.sortOrder = order);
   }
   // PTI as loaded (the end of the "Show original" line) minus current PTI
+  // For a linked group, the original is the latest original PTI of any id in it
   function deltaOrig(i) {
-    var e = S.eng, pos = e.origLast[i];
+    var e = S.eng, ids = S.groups[i] || [i], pos = -1;
+    for (var j = 0; j < ids.length; j++) if (e.origLast[ids[j]] > pos) pos = e.origLast[ids[j]];
     return (pos >= 0 ? S.orig.pti[pos] : S.orig.init[i]) - e.currentPti(i);
   }
   function deltaCell(i, merged) {
