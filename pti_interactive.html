@@ -96,6 +96,9 @@
     html.dark table.data td { border-color: rgba(55,65,81,.5); }
     html:not(.dark) table.data td { border-color: #e2e8f0; }
     .num { text-align: right; }
+    th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+    th.sortable:hover, th.sortable:focus-visible { color: #6366f1 !important; outline: none; }
+    th.sortable::after { content: attr(data-arrow); }
     .chip { display: inline-block; width: .7rem; height: .7rem; border-radius: 999px; vertical-align: middle; }
     .up { color: #e11d48; } .down { color: #059669; }
     html.dark .up { color: #fb7185; } html.dark .down { color: #34d399; }
@@ -211,14 +214,17 @@
       <section class="section border rounded-2xl overflow-hidden lg:col-span-2">
         <div class="section-head px-5 py-3.5 border-b flex items-center justify-between gap-3 flex-wrap">
           <span class="text-sm font-semibold uppercase tracking-wider">Players <span id="selCount" class="muted normal-case font-normal"></span></span>
-          <input id="playerSearch" class="field" style="max-width: 14rem" placeholder="Search players">
+          <div class="flex items-center gap-2">
+            <input id="playerSearch" class="field" style="max-width: 14rem" placeholder="Search players">
+            <button id="clearShownBtn" type="button" class="btn" title="Hide every player from the chart">Clear shown</button>
+          </div>
         </div>
         <div class="max-h-[28rem] overflow-auto">
           <table class="data">
             <thead><tr>
-              <th>Show</th><th>Player</th><th class="num">Matches</th>
-              <th class="num">Start PTI</th><th class="num">Start sigma</th>
-              <th class="num">Now PTI</th><th class="num">Change</th><th class="num">Now sigma</th>
+              <th class="sortable" data-sort="show">Show</th><th class="sortable" data-sort="name">Player</th><th class="num sortable" data-sort="matches">Matches</th>
+              <th class="num sortable" data-sort="startPti">Start PTI</th><th class="num sortable" data-sort="startSigma">Start sigma</th>
+              <th class="num sortable" data-sort="nowPti">Now PTI</th><th class="num sortable" data-sort="change">Change</th><th class="num sortable" data-sort="nowSigma">Now sigma</th>
             </tr></thead>
             <tbody id="playersBody"></tbody>
           </table>
@@ -268,7 +274,9 @@
     selected: [],        // ids shown on the chart, max 8
     slot: {},            // id -> colour slot 0..7 (kept while shown)
     metric: 'Pti', xMode: 'date', mode: 'move', invert: false,
-    search: ''
+    search: '',
+    sort: { key: null, dir: 1 },  // players table sort; null keeps file order
+    sortOrder: null               // players in sorted order, set when a header is clicked
   };
   var MAX_SHOWN = 8;
   // Categorical palette (fixed order), light and dark steps
@@ -352,7 +360,7 @@
       S.players = r.rows;
       S.starts = {};
       r.rows.forEach(function (p) { S.starts[p.id] = { pti: p.pti, sigma: p.sigma, lastPlayed: p.lastPlayed }; });
-      S.matches = m; S.overrides = []; S.selected = []; S.slot = {};
+      S.matches = m; S.overrides = []; S.selected = []; S.slot = {}; S.sortOrder = null;
       run();
       // Show the most active players first
       var counts = {};
@@ -618,14 +626,49 @@
     }
   }
 
+  // Value of a players-table column for sorting
+  function sortValue(p, key) {
+    var r = S.result.ratings[p.id], st = S.starts[p.id];
+    switch (key) {
+      case 'show': return S.selected.indexOf(p.id) >= 0 ? 0 : 1;  // shown first
+      case 'name': return p.name.toLowerCase();
+      case 'matches': return r.matches;
+      case 'startPti': return st.pti;
+      case 'startSigma': return st.sigma;
+      case 'nowPti': return r.pti;
+      case 'change': return r.pti - st.pti;
+      case 'nowSigma': return r.sigma;
+    }
+  }
+  // The order is fixed when a header is clicked, so rows don't jump while
+  // you tick boxes or drag; click the header again to re-sort.
+  function sortedPlayers() {
+    var key = S.sort.key, dir = S.sort.dir;
+    if (!key) return S.players;
+    if (S.sortOrder) return S.sortOrder;
+    return (S.sortOrder = S.players.slice().sort(function (a, b) {
+      var x = sortValue(a, key), y = sortValue(b, key);
+      if (x === y) return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;  // ties by name
+      return (x < y ? -1 : 1) * dir;
+    }));
+  }
+  function renderSortHeaders() {
+    Array.prototype.forEach.call(document.querySelectorAll('th.sortable'), function (th) {
+      var on = th.getAttribute('data-sort') === S.sort.key;
+      th.setAttribute('aria-sort', on ? (S.sort.dir > 0 ? 'ascending' : 'descending') : 'none');
+      th.setAttribute('data-arrow', on ? (S.sort.dir > 0 ? ' ▲' : ' ▼') : '');
+    });
+  }
+
   function renderPlayers() {
+    renderSortHeaders();
     var body = $('playersBody');
     if (!S.result) { body.innerHTML = ''; return; }
     var q = S.search.toLowerCase(), full = S.selected.length >= MAX_SHOWN;
     // Keep inputs that are being typed in
     var active = document.activeElement && body.contains(document.activeElement) ? document.activeElement : null;
     if (active && active.tagName === 'INPUT' && active.type === 'number') { updatePlayerNumbers(); return; }
-    body.innerHTML = S.players.filter(function (p) {
+    body.innerHTML = sortedPlayers().filter(function (p) {
       return !q || p.id.toLowerCase().indexOf(q) >= 0 || p.name.toLowerCase().indexOf(q) >= 0;
     }).map(function (p) {
       var shown = S.selected.indexOf(p.id) >= 0, r = S.result.ratings[p.id], st = S.starts[p.id];
@@ -641,6 +684,7 @@
         '<td class="num now-sigma">' + fmt(r.sigma) + '</td></tr>';
     }).join('');
     $('selCount').textContent = '(' + S.selected.length + ' of ' + MAX_SHOWN + ' shown)';
+    $('clearShownBtn').disabled = !S.selected.length;
   }
   function updatePlayerNumbers() {
     Array.prototype.forEach.call($('playersBody').querySelectorAll('tr'), function (tr) {
@@ -774,6 +818,19 @@
     $('downloadStartsBtn').addEventListener('click', downloadStarts);
 
     $('playerSearch').addEventListener('input', function () { S.search = this.value; renderPlayers(); });
+    $('clearShownBtn').addEventListener('click', function () { S.selected = []; S.slot = {}; if (S.result) renderAll(); });
+    Array.prototype.forEach.call(document.querySelectorAll('th.sortable'), function (th) {
+      th.tabIndex = 0;
+      function sortBy() {
+        var key = th.getAttribute('data-sort');
+        // First click: shown first / A to Z / smallest first; click again to reverse
+        S.sort = S.sort.key === key ? { key: key, dir: -S.sort.dir } : { key: key, dir: 1 };
+        S.sortOrder = null;
+        if (S.result) renderPlayers(); else renderSortHeaders();
+      }
+      th.addEventListener('click', sortBy);
+      th.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sortBy(); } });
+    });
     $('playersBody').addEventListener('change', function (e) {
       var tr = e.target.closest('tr'); if (!tr) return;
       if (e.target.classList.contains('show')) { toggle(tr.getAttribute('data-id'), e.target.checked); renderAll(); }
