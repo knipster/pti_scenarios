@@ -6,7 +6,7 @@ People open the data with **Alt+Shift+P** (Option+Shift+P on a Mac), or by doubl
 
 ## What you need
 
-- Node.js 18 or newer, and a copy of this repository (for `tools/pti-share.mjs`).
+- A copy of this repository, and either Python 3.6 or newer with the `cryptography` package (`python3 -m pip install cryptography`) for `tools/pti_share.py`, or Node.js 18 or newer for `tools/pti-share.mjs`. The two scripts do the same thing and share the same secret file, so use whichever runs on your machine. The commands below use Python; for Node, swap `python3 .../pti_share.py` for `node .../pti-share.mjs`.
 - The AWS CLI with the bucket's Linode Object Storage access key. That's the same key as the `LINODE_S3_*` repository secrets.
 - Your `ratings.csv` and `matches.csv`, in the format the explorer already reads.
 
@@ -25,8 +25,8 @@ Run these from a private folder outside the repository, for example `~/pti-share
 
 ```sh
 cd ~/pti-share
-node /path/to/pti_scenarios/tools/pti-share.mjs init --ratings ratings.csv --matches matches.csv
-node /path/to/pti_scenarios/tools/pti-share.mjs add-password --label first-user
+python3 /path/to/pti_scenarios/tools/pti_share.py init --ratings ratings.csv --matches matches.csv
+python3 /path/to/pti_scenarios/tools/pti_share.py add-password --label first-user
 ```
 
 - `init` gzips and encrypts both CSVs into `share-out/d/`. It also writes `pti-share-secret.json`, which holds the data key. Keep that file private and backed up. You need it to add passwords or update the data, and anyone who has it can decrypt the data.
@@ -80,7 +80,7 @@ It prints the match and player counts (about 745,000 matches and 69,000 players 
 - `--from 2025-01-01 --to 2025-12-31` to share only a date range (inclusive, US Eastern), as in the dive.
 - `--keep-csv DIR` to also keep the plain CSVs. Keep them private.
 
-The upload goes data files first, then the manifest that points to them, so nobody opening the data mid-update gets a broken set. If the upload fails, the shared data and the secret file stay as they were. The script updates the file names in `pti-share-secret.json`, so keep using that same file for `add-password` and later runs. `init` still has to be run once with `pti-share.mjs` before the first sync.
+The upload goes data files first, then the manifest that points to them, so nobody opening the data mid-update gets a broken set. If the upload fails, the shared data and the secret file stay as they were. The script updates the file names in `pti-share-secret.json`, so keep using that same file for `add-password` and later runs. `init` still has to be run once (with either script) before the first sync.
 
 ## Good to know
 
