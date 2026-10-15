@@ -73,6 +73,7 @@
 
   // Status of each match
   var OK = 0, NO_SETS = 1, UNKNOWN_PLAYER = 2, BAD_DATE = 3, SAME_PLAYER = 4;
+  var EXCLUDED = 128;  // flag added to status while a match is left out of the calculation
 
   function PtiEngine(players, matches) {
     var np = players.length, i, k, s;
@@ -122,6 +123,7 @@
 
     // Players per slot, and each player's chain of positions
     this.prev = new Int32Array(4 * n).fill(-1);
+    this.next = new Int32Array(4 * n).fill(-1);
     this.firstPos = new Int32Array(np).fill(-1);
     this.lastPos = new Int32Array(np).fill(-1);
     this.count = new Int32Array(np);
@@ -144,6 +146,7 @@
       for (s = 0; s < 4; s++) {
         i = this.pl[base + s];
         this.prev[base + s] = this.lastPos[i];
+        if (this.lastPos[i] >= 0) this.next[this.lastPos[i]] = base + s;
         if (this.firstPos[i] < 0) this.firstPos[i] = base + s;
         this.lastPos[i] = base + s;
         this.count[i]++;
@@ -266,6 +269,44 @@
   P.clearOverride = function (pos) { return this.setOverride(pos, null, null); };
   P.clearOverrides = function () { this.ovPti.clear(); this.ovSigma.clear(); this.hasOv.fill(0); return this.runAll(); };
 
+  // Leave match k out of the calculation: its players' histories skip it, as if
+  // it was never played (break days are counted from their previous match).
+  P.isExcluded = function (k) { return (this.status[k] & EXCLUDED) !== 0; };
+  P.exclude = function (k) {
+    if (this.status[k] > NO_SETS) return { recalculated: 0, ms: 0 };  // already excluded, or never rated
+    var base = 4 * k, players = [];
+    for (var s = 0; s < 4; s++) {
+      var pos = base + s, i = this.pl[pos], pv = this.prev[pos], nx = this.next[pos];
+      if (nx >= 0) this.prev[nx] = pv; else this.lastPos[i] = pv;
+      if (pv >= 0) this.next[pv] = nx; else this.firstPos[i] = nx;
+      this.prev[pos] = this.next[pos] = -1;
+      this.count[i]--;
+      players.push(i);
+    }
+    this.status[k] |= EXCLUDED;
+    return this.update(k + 1, players);
+  };
+  P.include = function (k) {
+    if (!this.isExcluded(k)) return { recalculated: 0, ms: 0 };
+    this.status[k] &= ~EXCLUDED;
+    var base = 4 * k, players = [];
+    for (var s = 0; s < 4; s++) {
+      var pos = base + s, i = this.pl[pos], pv = this.lastPos[i], nx = -1;
+      while (pv > pos) { nx = pv; pv = this.prev[pv]; }  // walk back to the player's match before this one
+      this.prev[pos] = pv; this.next[pos] = nx;
+      if (pv >= 0) this.next[pv] = pos; else this.firstPos[i] = pos;
+      if (nx >= 0) this.prev[nx] = pos; else this.lastPos[i] = pos;
+      this.count[i]++;
+      players.push(i);
+    }
+    // Rate k, then always redo each player's next match: its start now comes
+    // from k, even when k's own result matches what it was before exclusion.
+    var t = now();
+    this.compute(k);
+    var res = this.update(k + 1, players);
+    return { recalculated: res.recalculated + 1, ms: now() - t };
+  };
+
   // Position of player i in match k, or -1
   P.posOf = function (i, k) {
     for (var s = 0; s < 4; s++) if (this.pl[4 * k + s] === i) return 4 * k + s;
@@ -281,6 +322,7 @@
   P.currentSigma = function (i) { return this.lastPos[i] >= 0 ? this.endSigma[this.lastPos[i]] : this.initSigma[i]; };
 
   P.error = function (k) {
+    if (this.status[k] & EXCLUDED) return 'Excluded from the calculation';
     switch (this.status[k]) {
       case NO_SETS: return 'No sets in score; ratings unchanged';
       case BAD_DATE: return 'Missing or invalid date';
