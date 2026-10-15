@@ -157,6 +157,8 @@
     // Linked ids: origPl keeps each slot's own id, pl holds the id it rates as
     this.origPl = this.pl.slice();
     this.origFirst = this.firstPos.slice();
+    this.origLast = this.lastPos.slice();
+    this.origPrev = this.prev.slice();  // each id's history as loaded, before exclusions and links
     this.root = new Int32Array(np);
     for (i = 0; i < np; i++) this.root[i] = i;
     this._force = new Uint8Array(n);
@@ -430,6 +432,12 @@
     var out = new Array(this.count[i]), j = out.length, pos = this.lastPos[i];
     while (pos >= 0 && j > 0) { out[--j] = pos; pos = this.prev[pos]; }
     return out;
+  };
+  // Positions of id i in its history as loaded, oldest first
+  P.origPositions = function (i) {
+    var out = [], pos = this.origLast[i];
+    while (pos >= 0) { out.push(pos); pos = this.origPrev[pos]; }
+    return out.reverse();
   };
   P.currentPti = function (i) { return this.lastPos[i] >= 0 ? this.endPti[this.lastPos[i]] : this.initPti[i]; };
   P.currentSigma = function (i) { return this.lastPos[i] >= 0 ? this.endSigma[this.lastPos[i]] : this.initSigma[i]; };
