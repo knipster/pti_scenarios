@@ -99,6 +99,9 @@
     th.sortable:hover, th.sortable:focus-visible { color: #6366f1 !important; outline: none; }
     th.sortable::after { content: attr(data-arrow); }
     tr.excluded td { opacity: .55; }
+    tr.merged td { opacity: .6; }
+    .badge { display: inline-block; font-size: .6875rem; font-weight: 600; padding: 0 .4rem; border-radius: 9999px; background: rgba(99,102,241,.12); color: #6366f1; white-space: nowrap; }
+    html.dark .badge { background: rgba(129,140,248,.18); color: #a5b4fc; }
     tr.excluded td.use { opacity: 1; }
     tr.excluded .teams, tr.excluded .score { text-decoration: line-through; }
     .chip { display: inline-block; width: .7rem; height: .7rem; border-radius: 999px; vertical-align: middle; }
@@ -191,7 +194,7 @@
         <span class="text-sm font-semibold uppercase tracking-wider">Ratings over time</span>
         <div class="flex items-center gap-2 flex-wrap">
           <div class="seg" id="metricSeg"><button data-v="Pti" class="on">PTI</button><button data-v="Sigma">Sigma</button></div>
-          <div class="seg" id="xSeg"><button data-v="date" class="on">By date</button><button data-v="index">By match #</button></div>
+          <div class="seg" id="xSeg"><button data-v="index" class="on">By match #</button><button data-v="date">By date</button></div>
           <div class="seg" id="modeSeg" title="Move: drag starting points and breaks. Add break: click a match point."><button data-v="move" class="on">Move</button><button data-v="add">Add break</button></div>
           <label class="btn"><input id="invertChk" type="checkbox" class="accent-indigo-600"> Better = up</label>
         </div>
@@ -219,6 +222,7 @@
           <span class="text-sm font-semibold uppercase tracking-wider">Players <span id="selCount" class="muted normal-case font-normal"></span></span>
           <div class="flex items-center gap-2">
             <input id="playerSearch" class="field" style="max-width: 14rem" placeholder="Search players">
+            <button id="linkShownBtn" type="button" class="btn" title="Treat the shown players' ids as one player">Link shown</button>
             <button id="clearShownBtn" type="button" class="btn" title="Hide every player from the chart">Clear shown</button>
           </div>
         </div>
@@ -234,6 +238,7 @@
         </div>
       </section>
 
+      <div class="space-y-8">
       <!-- Breaks -->
       <section class="section border rounded-2xl overflow-hidden">
         <div class="section-head px-5 py-3.5 border-b">
@@ -241,6 +246,15 @@
         </div>
         <div id="breaksList" class="p-4 space-y-2 max-h-[28rem] overflow-auto text-sm"></div>
       </section>
+
+      <!-- Linked ids -->
+      <section class="section border rounded-2xl overflow-hidden">
+        <div class="section-head px-5 py-3.5 border-b">
+          <span class="text-sm font-semibold uppercase tracking-wider">Linked players</span>
+        </div>
+        <div id="linksList" class="p-4 space-y-2 max-h-[28rem] overflow-auto text-sm"></div>
+      </section>
+      </div>
     </div>
 
     <!-- Matches -->
@@ -278,11 +292,12 @@
     overrides: [],       // breaks: [{ i, k, pos, pti?, sigma? }]
     selected: [],        // player indexes shown on the chart, max 8
     slot: {},            // player index -> colour slot 0..7 (kept while shown)
-    metric: 'Pti', xMode: 'date', mode: 'move', invert: false,
+    metric: 'Pti', xMode: 'index', mode: 'move', invert: false,
     search: '',
     sort: { key: null, dir: 1 },  // players table sort; null keeps file order
     sortOrder: null,              // player indexes in sorted order, set when a header is clicked
     excluded: [],                 // match indexes left out of the calculation
+    groups: {},                   // linked ids: root player index -> member indexes (root first)
     matchDir: -1                  // matches table date order: -1 newest first, 1 oldest first
   };
   var MAX_SHOWN = 8, MAX_TABLE_ROWS = 200, MAX_MATCH_ROWS = 300;
@@ -414,7 +429,7 @@
         S.eng = new PtiEngine(r.rows, m);
         var t2 = performance.now();
         var run = S.eng.runAll();
-        S.overrides = []; S.selected = []; S.slot = {}; S.sortOrder = null; S.xs = null; S.excluded = [];
+        S.overrides = []; S.selected = []; S.slot = {}; S.sortOrder = null; S.xs = null; S.excluded = []; S.groups = {};
         S.ratingsText = S.matchesText = null;  // free the raw text
         // Show the most active players first
         var top = [];
@@ -741,24 +756,30 @@
     }
     body.innerHTML = rows.map(function (i) {
       var p = S.players[i], shown = S.selected.indexOf(i) >= 0, ch = e.currentPti(i) - e.initPti[i];
-      return '<tr data-i="' + i + '">' +
-        '<td><input type="checkbox" class="show accent-indigo-600"' + (shown ? ' checked' : '') + (!shown && full ? ' disabled title="Up to 8 players at a time"' : '') + '></td>' +
-        '<td>' + (shown ? '<span class="chip" style="background:' + colorOf(i) + '"></span> ' : '') + esc(p.name) + (p.name !== p.id ? ' <span class="muted">' + esc(p.id) + '</span>' : '') + '</td>' +
+      var r = e.root[i], g = S.groups[r], merged = r !== i;
+      var tag = merged ? ' <span class="badge">linked to ' + esc(nameOf(r)) + '</span>'
+        : g ? ' <span class="badge" title="' + esc(g.slice(1).map(nameOf).join(', ')) + '">+' + (g.length - 1) + ' linked</span>' : '';
+      var off = merged ? ' disabled title="Not used while linked to ' + esc(nameOf(r)) + '"' : '';
+      return '<tr data-i="' + i + '"' + (merged ? ' class="merged"' : '') + '>' +
+        '<td><input type="checkbox" class="show accent-indigo-600"' + (shown ? ' checked' : '') + (merged ? off : !shown && full ? ' disabled title="Up to 8 players at a time"' : '') + '></td>' +
+        '<td>' + (shown ? '<span class="chip" style="background:' + colorOf(i) + '"></span> ' : '') + esc(p.name) + (p.name !== p.id ? ' <span class="muted">' + esc(p.id) + '</span>' : '') + tag + '</td>' +
         '<td class="num">' + num(e.count[i]) + '</td>' +
-        '<td class="num"><input type="number" step="0.01" class="field field-sm start-pti" value="' + fmt(e.initPti[i]) + '"></td>' +
-        '<td class="num"><input type="number" step="0.01" min="0.01" class="field field-sm start-sigma" value="' + fmt(e.initSigma[i]) + '"></td>' +
-        '<td class="num now-pti">' + fmt(e.currentPti(i)) + '</td>' +
-        '<td class="num now-ch ' + (ch > 0.005 ? 'up' : ch < -0.005 ? 'down' : '') + '">' + (ch >= 0 ? '+' : '') + fmt(ch) + '</td>' +
-        '<td class="num now-sigma">' + fmt(e.currentSigma(i)) + '</td></tr>';
+        '<td class="num"><input type="number" step="0.01" class="field field-sm start-pti" value="' + fmt(e.initPti[i]) + '"' + off + '></td>' +
+        '<td class="num"><input type="number" step="0.01" min="0.01" class="field field-sm start-sigma" value="' + fmt(e.initSigma[i]) + '"' + off + '></td>' +
+        '<td class="num now-pti">' + (merged ? '–' : fmt(e.currentPti(i))) + '</td>' +
+        '<td class="num now-ch ' + (merged ? '' : ch > 0.005 ? 'up' : ch < -0.005 ? 'down' : '') + '">' + (merged ? '–' : (ch >= 0 ? '+' : '') + fmt(ch)) + '</td>' +
+        '<td class="num now-sigma">' + (merged ? '–' : fmt(e.currentSigma(i))) + '</td></tr>';
     }).join('') + (matched > rows.length
       ? '<tr><td colspan="8" class="muted text-center">Showing ' + num(rows.length) + ' of ' + num(matched) + ' players. Search or sort to find others.</td></tr>' : '');
     $('selCount').textContent = '(' + S.selected.length + ' of ' + MAX_SHOWN + ' shown)';
     $('clearShownBtn').disabled = !S.selected.length;
+    $('linkShownBtn').disabled = S.selected.length < 2;
   }
   function updatePlayerNumbers() {
     var e = S.eng;
     Array.prototype.forEach.call($('playersBody').querySelectorAll('tr[data-i]'), function (tr) {
       var i = +tr.getAttribute('data-i'), ch = e.currentPti(i) - e.initPti[i], el = tr.querySelector('.now-ch');
+      if (e.root[i] !== i) return;
       tr.querySelector('.now-pti').textContent = fmt(e.currentPti(i));
       tr.querySelector('.now-sigma').textContent = fmt(e.currentSigma(i));
       el.textContent = (ch >= 0 ? '+' : '') + fmt(ch);
@@ -812,13 +833,21 @@
     S.excluded.forEach(function (k) {
       for (var s = 0; s < 4; s++) if (S.slot[e.pl[4 * k + s]] != null) { ks.add(k); nEx++; break; }
     });
+    // Matches dropped because linked ids met in them aren't in any history either
+    if (S.selected.some(function (i) { return S.groups[i]; })) {
+      for (var k = 0; k < e.n; k++) {
+        if (!(e.status[k] & PtiEngine.CLASH) || ks.has(k)) continue;
+        for (var s = 0; s < 4; s++) if (S.slot[e.pl[4 * k + s]] != null) { ks.add(k); break; }
+      }
+    }
     var dir = S.matchDir;
     var list = Array.from(ks).sort(function (a, b) { return (e.day[a] - e.day[b] || a - b) * dir; });
     $('matchesCount').textContent = num(list.length) + ' matches' + (nEx ? ' (' + num(nEx) + ' excluded)' : '') +
       (list.length > MAX_MATCH_ROWS ? ', ' + (dir < 0 ? 'latest ' : 'earliest ') + MAX_MATCH_ROWS + ' shown' : '');
     body.innerHTML = list.slice(0, MAX_MATCH_ROWS).map(function (k) {
-      var b = 4 * k, ex = e.isExcluded(k);
-      var cells = ex ? '<span class="muted">Excluded from the calculation</span>' : [0, 1, 2, 3].map(function (s) {
+      var b = 4 * k, ex = e.isExcluded(k), clash = e.isClash(k);
+      var cells = clash ? '<span class="muted">Not rated: linked players are both in this match</span>' :
+        ex ? '<span class="muted">Excluded from the calculation</span>' : [0, 1, 2, 3].map(function (s) {
         var pos = b + s, i = e.pl[pos];
         if (S.slot[i] == null) return '';
         var sp = e.startPti(pos), d = e.endPti[pos] - sp;
@@ -827,10 +856,10 @@
           ' <span class="' + (d > 0.005 ? 'up' : d < -0.005 ? 'down' : '') + '">(' + (d >= 0 ? '+' : '') + fmt(d) + ')</span>' +
           ' <span class="muted">σ ' + fmt(e.endSigma[pos]) + '</span></span>';
       }).join('');
-      return '<tr data-k="' + k + '"' + (ex ? ' class="excluded"' : '') + '>' +
-        '<td class="use"><input type="checkbox" class="use-chk" aria-label="Use match #' + num(k + 1) + ' in the calculation"' + (ex ? '' : ' checked') + '></td>' +
+      return '<tr data-k="' + k + '"' + (ex || clash ? ' class="excluded"' : '') + '>' +
+        '<td class="use"><input type="checkbox" class="use-chk" aria-label="Use match #' + num(k + 1) + ' in the calculation"' + (ex ? '' : ' checked') + (clash && !ex ? ' disabled' : '') + '></td>' +
         '<td class="muted">' + num(k + 1) + '</td><td class="whitespace-nowrap">' + esc(e.dates[k]) + '</td>' +
-        '<td class="teams">' + esc(nameOf(e.pl[b])) + ' & ' + esc(nameOf(e.pl[b + 1])) + '</td><td class="teams">' + esc(nameOf(e.pl[b + 2])) + ' & ' + esc(nameOf(e.pl[b + 3])) + '</td>' +
+        '<td class="teams">' + esc(nameOf(e.origPl[b])) + ' & ' + esc(nameOf(e.origPl[b + 1])) + '</td><td class="teams">' + esc(nameOf(e.origPl[b + 2])) + ' & ' + esc(nameOf(e.origPl[b + 3])) + '</td>' +
         '<td class="whitespace-nowrap score">' + esc(e.scores[k]) + '</td><td>' + cells + '</td></tr>';
     }).join('');
   }
@@ -841,7 +870,64 @@
     renderAll();
   }
 
-  function renderAll() { refreshChart(); renderPlayers(); renderBreaks(); renderMatches(); }
+  // ---------- Linked ids ----------
+  function rebuildGroups() {
+    var e = S.eng, g = {};
+    for (var i = 0; i < e.np; i++) if (e.root[i] !== i) (g[e.root[i]] = g[e.root[i]] || [e.root[i]]).push(i);
+    S.groups = g;
+  }
+  // After links change: breaks follow the id their match now rates as, and
+  // the chart shows each group once, as its root
+  function afterLinkChange(res, show) {
+    var e = S.eng;
+    rebuildGroups();
+    S.overrides.forEach(function (o) { o.i = e.pl[o.pos]; });
+    var keep = [];
+    S.selected.concat(show || []).forEach(function (i) {
+      var r = e.root[i];
+      if (keep.indexOf(r) < 0 && keep.length < MAX_SHOWN) keep.push(r);
+    });
+    var old = S.slot; S.selected = []; S.slot = {};
+    keep.forEach(function (i) { if (old[i] != null) { S.slot[i] = old[i]; S.selected.push(i); } });
+    keep.forEach(function (i) { if (S.slot[i] == null) toggle(i, true); });
+    S.sortOrder = null;
+    setPerf(res);
+    renderAll();
+  }
+  function linkShown() {
+    var e = S.eng, sel = S.selected.slice(), t = performance.now(), n = 0;
+    if (!e || sel.length < 2) return;
+    for (var j = 1; j < sel.length; j++) n += e.link(sel[0], sel[j]).recalculated;
+    afterLinkChange({ recalculated: n, ms: performance.now() - t });
+  }
+  function unlinkId(i) {
+    var e = S.eng, shown = S.selected.indexOf(e.root[i]) >= 0;
+    var other = S.groups[e.root[i]].filter(function (j) { return j !== i; })[0];
+    var res = e.unlink(i);
+    // Keep both halves on the chart if the group was shown
+    afterLinkChange(res, shown ? [i, e.root[other]] : null);
+  }
+  function renderLinks() {
+    var el = $('linksList'), e = S.eng, roots = Object.keys(S.groups);
+    if (!e || !roots.length) {
+      el.innerHTML = '<p class="muted text-xs">No linked players. Show two or more players and click <b>Link shown</b> to treat their ids as one player. The id with the earliest match keeps its starting PTI and sigma.</p>';
+      return;
+    }
+    el.innerHTML = roots.map(function (r) {
+      var g = S.groups[r];
+      return '<div class="glass-card rounded-xl p-3">' +
+        '<div class="font-medium mb-1">' + (S.slot[r] != null ? '<span class="chip" style="background:' + colorOf(+r) + '"></span> ' : '') + esc(nameOf(+r)) +
+        ' <span class="muted text-xs font-normal">' + num(e.count[r]) + ' matches</span></div>' +
+        g.map(function (i, j) {
+          var p = S.players[i];
+          return '<div class="flex items-center justify-between gap-2 text-xs py-0.5"><span>' + esc(p.name) + (p.name !== p.id ? ' <span class="muted">' + esc(p.id) + '</span>' : '') +
+            (j === 0 ? ' <span class="muted">• start ' + fmt(e.initPti[i]) + ' / σ ' + fmt(e.initSigma[i]) + '</span>' : '') +
+            '</span><button type="button" class="btn unlink" data-i="' + i + '" title="Give this id its own history again">Unlink</button></div>';
+        }).join('') + '</div>';
+    }).join('');
+  }
+
+  function renderAll() { refreshChart(); renderPlayers(); renderBreaks(); renderLinks(); renderMatches(); }
 
   // ---------- Downloads ----------
   function csvCell(v) { v = v == null ? '' : typeof v === 'number' ? String(Math.round(v * 10000) / 10000) : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
@@ -935,6 +1021,10 @@
     $('downloadStartsBtn').addEventListener('click', downloadStarts);
 
     $('playerSearch').addEventListener('input', function () { S.search = this.value; renderPlayers(); });
+    $('linkShownBtn').addEventListener('click', linkShown);
+    $('linksList').addEventListener('click', function (e) {
+      var b = e.target.closest('button.unlink'); if (b) unlinkId(+b.getAttribute('data-i'));
+    });
     $('clearShownBtn').addEventListener('click', function () { S.selected = []; S.slot = {}; if (S.eng) renderAll(); });
     Array.prototype.forEach.call(document.querySelectorAll('#playersHead th.sortable'), function (th) {
       th.tabIndex = 0;

@@ -74,6 +74,7 @@
   // Status of each match
   var OK = 0, NO_SETS = 1, UNKNOWN_PLAYER = 2, BAD_DATE = 3, SAME_PLAYER = 4;
   var EXCLUDED = 128;  // flag added to status while a match is left out of the calculation
+  var CLASH = 64;      // flag added while linked ids would put one player in a match twice
 
   function PtiEngine(players, matches) {
     var np = players.length, i, k, s;
@@ -152,6 +153,14 @@
         this.count[i]++;
       }
     }
+
+    // Linked ids: origPl keeps each slot's own id, pl holds the id it rates as
+    this.origPl = this.pl.slice();
+    this.origFirst = this.firstPos.slice();
+    this.root = new Int32Array(np);
+    for (i = 0; i < np; i++) this.root[i] = i;
+    this._force = new Uint8Array(n);
+    this._forced = 0;
 
     this.endPti = new Float64Array(4 * n);
     this.endSigma = new Float64Array(4 * n);
@@ -238,10 +247,12 @@
     var endPti = this.endPti, endSigma = this.endSigma, left = 0, done = 0, k, s;
     dirty.fill(0);
     for (s = 0; s < players.length; s++) if (players[s] >= 0 && !dirty[players[s]]) { dirty[players[s]] = 1; left++; }
-    for (k = fromK; k < this.n && left > 0; k++) {
-      var base = 4 * k;
+    var force = this._force;  // matches that must be redone whatever their players' state
+    for (k = fromK; k < this.n && (left > 0 || this._forced > 0); k++) {
+      var base = 4 * k, f = force[k];
+      if (f) { force[k] = 0; this._forced--; }
       if (this.status[k] > NO_SETS) continue;
-      if (!(dirty[pl[base]] | dirty[pl[base + 1]] | dirty[pl[base + 2]] | dirty[pl[base + 3]])) continue;
+      if (!f && !(dirty[pl[base]] | dirty[pl[base + 1]] | dirty[pl[base + 2]] | dirty[pl[base + 3]])) continue;
       for (s = 0; s < 4; s++) { old[s] = endPti[base + s]; old[4 + s] = endSigma[base + s]; }
       this.compute(k);
       done++;
@@ -272,6 +283,7 @@
   // Leave match k out of the calculation: its players' histories skip it, as if
   // it was never played (break days are counted from their previous match).
   P.isExcluded = function (k) { return (this.status[k] & EXCLUDED) !== 0; };
+  P.isClash = function (k) { return (this.status[k] & CLASH) !== 0; };
   P.exclude = function (k) {
     if (this.status[k] > NO_SETS) return { recalculated: 0, ms: 0 };  // already excluded, or never rated
     var base = 4 * k, players = [];
@@ -289,6 +301,7 @@
   P.include = function (k) {
     if (!this.isExcluded(k)) return { recalculated: 0, ms: 0 };
     this.status[k] &= ~EXCLUDED;
+    if (this.status[k] > NO_SETS) return { recalculated: 0, ms: 0 };  // still clashing
     var base = 4 * k, players = [];
     for (var s = 0; s < 4; s++) {
       var pos = base + s, i = this.pl[pos], pv = this.lastPos[i], nx = -1;
@@ -307,6 +320,106 @@
     return { recalculated: res.recalculated + 1, ms: now() - t };
   };
 
+  // Link ids so their matches form one history. The id with the earliest
+  // match keeps its starting PTI and sigma; the others' starts are unused
+  // until they are unlinked.
+  P.linkedTo = function (i) { return this.root[i]; };
+  P.group = function (i) {
+    var r = this.root[i], out = [];
+    for (var j = 0; j < this.np; j++) if (this.root[j] === r) out.push(j);
+    return out;
+  };
+  P.link = function (a, b) {
+    var ra = this.root[a], rb = this.root[b];
+    if (ra === rb) return { recalculated: 0, ms: 0 };
+    var members = this.group(a).concat(this.group(b));
+    return this._regroup([members], members);
+  };
+  // Take id i out of its group
+  P.unlink = function (i) {
+    var rest = this.group(i).filter(function (j) { return j !== i; });
+    if (!rest.length) return { recalculated: 0, ms: 0 };
+    return this._regroup([[i], rest], rest.concat([i]));
+  };
+  P._regroup = function (groups, affected) {
+    var t = now(), n = this.n, np = this.np, s, k, j, i;
+    var fromK = n, roots = [];
+    for (j = 0; j < affected.length; j++) {
+      var fp = this.firstPos[this.root[affected[j]]];
+      if (fp >= 0) fromK = Math.min(fromK, fp >> 2);
+    }
+    // New roots: the member with the earliest match of its own
+    var origFirst = this.origFirst;
+    groups.forEach(function (g) {
+      var r = g[0];
+      for (j = 1; j < g.length; j++) {
+        var a = origFirst[g[j]], b = origFirst[r];
+        if (a >= 0 && (b < 0 || a < b)) r = g[j];
+      }
+      for (j = 0; j < g.length; j++) this.root[g[j]] = r;
+      roots.push(r);
+    }, this);
+    var self = this, force = this._force;
+    function redo(m) { if (!force[m]) { force[m] = 1; self._forced++; } if (m < fromK) fromK = m; }
+    var hit = new Uint8Array(np);
+    for (j = 0; j < affected.length; j++) {
+      i = affected[j]; hit[i] = 1;
+      this.firstPos[i] = this.lastPos[i] = -1; this.count[i] = 0;
+    }
+    var pl = this.pl, op = this.origPl, prev = this.prev, next = this.next, st = this.status;
+    for (k = 0; k < n; k++) {
+      var base = 4 * k, touched = false;
+      for (s = 0; s < 4; s++) {
+        var o = op[base + s];
+        if (o >= 0 && hit[o]) { pl[base + s] = this.root[o]; touched = true; }
+      }
+      if (!touched || (st[k] & 63) > NO_SETS) continue;  // never rated
+      var clash = pl[base] === pl[base + 1] || pl[base] === pl[base + 2] || pl[base] === pl[base + 3] ||
+        pl[base + 1] === pl[base + 2] || pl[base + 1] === pl[base + 3] || pl[base + 2] === pl[base + 3];
+      var was = st[k] > NO_SETS;
+      if (clash) st[k] |= CLASH; else st[k] &= ~CLASH;
+      var now_ = st[k] > NO_SETS;
+      if (was && now_) continue;  // still out of the calculation
+      if (!was && now_) {
+        // Leaves the calculation: unlink the players this rebuild doesn't touch
+        for (s = 0; s < 4; s++) {
+          var pos = base + s;
+          if (hit[op[pos]]) continue;
+          var pv = prev[pos], nx = next[pos], q = pl[pos];
+          if (nx >= 0) prev[nx] = pv; else this.lastPos[q] = pv;
+          if (pv >= 0) next[pv] = nx; else this.firstPos[q] = nx;
+          prev[pos] = next[pos] = -1; this.count[q]--;
+          if (nx >= 0) redo(nx >> 2);  // their next match now follows on from an earlier one
+        }
+        continue;
+      }
+      if (now_) continue;
+      for (s = 0; s < 4; s++) {
+        pos = base + s; q = pl[pos];
+        if (was && !hit[op[pos]]) {
+          // Rejoins the calculation: relink a player outside the rebuild
+          pv = this.lastPos[q]; nx = -1;
+          while (pv > pos) { nx = pv; pv = prev[pv]; }
+          prev[pos] = pv; next[pos] = nx;
+          if (pv >= 0) next[pv] = pos; else this.firstPos[q] = pos;
+          if (nx >= 0) prev[nx] = pos; else this.lastPos[q] = pos;
+          this.count[q]++;
+          redo(k);
+          if (nx >= 0) redo(nx >> 2);
+          continue;
+        }
+        if (!hit[op[pos]]) continue;
+        // Rebuilt chain: append in match order
+        prev[pos] = this.lastPos[q]; next[pos] = -1;
+        if (this.lastPos[q] >= 0) next[this.lastPos[q]] = pos; else this.firstPos[q] = pos;
+        this.lastPos[q] = pos; this.count[q]++;
+        redo(k);
+      }
+    }
+    var res = this.update(fromK, roots);
+    return { recalculated: res.recalculated, ms: now() - t };
+  };
+
   // Position of player i in match k, or -1
   P.posOf = function (i, k) {
     for (var s = 0; s < 4; s++) if (this.pl[4 * k + s] === i) return 4 * k + s;
@@ -323,6 +436,7 @@
 
   P.error = function (k) {
     if (this.status[k] & EXCLUDED) return 'Excluded from the calculation';
+    if (this.status[k] & CLASH) return 'Linked players appear in the same match';
     switch (this.status[k]) {
       case NO_SETS: return 'No sets in score; ratings unchanged';
       case BAD_DATE: return 'Missing or invalid date';
@@ -360,6 +474,8 @@
   function now() { return typeof performance !== 'undefined' ? performance.now() : Date.now(); }
 
   PtiEngine.toDay = toDay;
+  PtiEngine.EXCLUDED = EXCLUDED;
+  PtiEngine.CLASH = CLASH;
   root.PtiEngine = PtiEngine;
   if (typeof module !== 'undefined' && module.exports) module.exports = PtiEngine;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
