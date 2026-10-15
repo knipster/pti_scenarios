@@ -196,6 +196,7 @@
           <div class="seg" id="metricSeg"><button data-v="Pti" class="on">PTI</button><button data-v="Sigma">Sigma</button></div>
           <div class="seg" id="xSeg"><button data-v="index" class="on">By match #</button><button data-v="date">By date</button></div>
           <div class="seg" id="modeSeg" title="Move: drag starting points and breaks. Add break: click a match point."><button data-v="move" class="on">Move</button><button data-v="add">Add break</button></div>
+          <label class="btn" title="Overlay each shown player's history as loaded, before any edits"><input id="origChk" type="checkbox" class="accent-indigo-600"> Show original</label>
           <label class="btn"><input id="invertChk" type="checkbox" class="accent-indigo-600"> Better = up</label>
         </div>
       </div>
@@ -293,6 +294,8 @@
     selected: [],        // player indexes shown on the chart, max 8
     slot: {},            // player index -> colour slot 0..7 (kept while shown)
     metric: 'Pti', xMode: 'index', mode: 'move', invert: false,
+    showOrig: false,     // overlay the history as loaded
+    orig: null,          // { pti, sigma } end values per position from the first run, before any edits
     search: '',
     sort: { key: null, dir: 1 },  // players table sort; null keeps file order
     sortOrder: null,              // player indexes in sorted order, set when a header is clicked
@@ -429,6 +432,7 @@
         S.eng = new PtiEngine(r.rows, m);
         var t2 = performance.now();
         var run = S.eng.runAll();
+        S.orig = { pti: S.eng.endPti.slice(), sigma: S.eng.endSigma.slice() };
         S.overrides = []; S.selected = []; S.slot = {}; S.sortOrder = null; S.xs = null; S.excluded = []; S.groups = {};
         S.ratingsText = S.matchesText = null;  // free the raw text
         // Show the most active players first
@@ -512,6 +516,15 @@
     return pts;
   }
 
+  // History of id i as loaded: its starting values from the file and the end of each of its matches
+  function origSeriesFor(i, xs, gap) {
+    var e = S.eng, key = field(), ends = S.orig[key], list = e.origPositions(i), pts = [];
+    if (!list.length) return pts;
+    pts.push({ x: xs[list[0] >> 2] - gap, y: key === 'pti' ? S.players[i].pti : S.players[i].sigma, kind: 'origStart', i: i });
+    for (var j = 0; j < list.length; j++) pts.push({ x: xs[list[j] >> 2], y: ends[list[j]], kind: 'orig', i: i, k: list[j] >> 2, pos: list[j] });
+    return pts;
+  }
+
   // ---------- Chart ----------
   var chart = null, drag = null, frame = null, lastClick = { t: 0 };
 
@@ -531,6 +544,19 @@
     var span = isFinite(first) ? Math.max(last - first, 1) : 1;
     var gap = S.xMode === 'index' ? Math.max(0.6, span * 0.01) : Math.max(DAY * 3, span * 0.015);
     var surface = themeColors().surface;
+    var orig = [];
+    if (S.showOrig && S.orig) S.selected.forEach(function (r) {
+      // A linked player's original is each of its ids' own history
+      (S.groups[r] || [r]).forEach(function (i, j) {
+        var c = colorOf(r);
+        orig.push({
+          label: nameOf(i) + ' (original)', data: origSeriesFor(i, xs, gap), order: 1,
+          borderColor: c + '99', backgroundColor: c + '99', borderWidth: 1.5, borderDash: j ? [2, 3] : [5, 4], tension: 0,  // linked ids: dotted
+          pointRadius: function (ctx) { return ctx.raw && ctx.raw.kind === 'origStart' ? 4 : 0; },
+          pointStyle: 'circle', pointHoverRadius: 4, pointHitRadius: 4
+        });
+      });
+    });
     return S.selected.map(function (i) {
       var c = colorOf(i), data = seriesFor(i, xs, gap), dense = data.length > 120;
       return {
@@ -544,12 +570,20 @@
         pointStyle: function (ctx) { return ctx.raw && ctx.raw.kind === 'break' ? 'rectRot' : 'circle'; },
         segment: {
           borderDash: function (ctx) { return ctx.p1.raw && ctx.p1.raw.kind === 'break' ? [4, 4] : undefined; }
-        }
+        },
+        order: 0
       };
-    });
+    }).concat(orig);
   }
 
   function tooltipLines(raw) {
+    if (raw.kind === 'origStart') return ['Original starting ' + (S.metric === 'Pti' ? 'PTI' : 'sigma') + ': ' + fmt(raw.y)];
+    if (raw.kind === 'orig') {
+      var op = raw.pos, os = S.orig.pti, prevPos = S.eng.origPrev[op];
+      var o0 = prevPos >= 0 ? os[prevPos] : S.players[raw.i].pti;
+      return ['Original, match #' + num(raw.k + 1) + ' • ' + S.eng.scores[raw.k],
+        'PTI ' + fmt(o0) + ' → ' + fmt(os[op]) + ' • sigma ' + fmt(S.orig.sigma[op])];
+    }
     if (raw.kind === 'start') return ['Starting ' + (S.metric === 'Pti' ? 'PTI' : 'sigma') + ': ' + fmt(raw.y), 'Drag to change'];
     if (raw.kind === 'break') return ['Break before match #' + num(raw.k + 1) + ': ' + fmt(raw.y), 'Drag to move, double-click to remove'];
     var e = S.eng, pos = raw.pos, k = raw.k, s = pos & 3, b = 4 * k;
@@ -560,7 +594,8 @@
       'With ' + nameOf(e.pl[partner]) + ' vs ' + nameOf(e.pl[them[0]]) + ' & ' + nameOf(e.pl[them[1]]),
       'PTI ' + fmt(sp) + ' → ' + fmt(e.endPti[pos]) + ' (' + (d >= 0 ? '+' : '') + fmt(d) + ')',
       'Sigma ' + fmt(e.startSigma(pos)) + ' → ' + fmt(e.endSigma[pos]) + ' • ' + e.breakDays(pos) + ' days since last match'
-    ];
+    ].concat(S.showOrig ? ['Original: PTI ' + fmt(S.orig.pti[pos]) + ', sigma ' + fmt(S.orig.sigma[pos]) +
+      (e.origPl[pos] !== e.pl[pos] ? ' (as ' + nameOf(e.origPl[pos]) + ')' : '')] : []);
   }
 
   function makeChart() {
@@ -590,7 +625,7 @@
             callbacks: {
               title: function (items) {
                 var r = items[0].raw; if (!r) return '';
-                return nameOf(r.i) + (r.kind === 'match' ? ' • ' + S.eng.dates[r.k] : '');
+                return nameOf(r.i) + (r.kind === 'match' || r.kind === 'orig' ? ' • ' + S.eng.dates[r.k] : '');
               },
               label: function (item) { return item.raw ? tooltipLines(item.raw) : ''; }
             }
@@ -620,8 +655,11 @@
     if (!chart) return null;
     var els = chart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, false);
     if (!els.length) return null;
-    var raw = chart.data.datasets[els[0].datasetIndex].data[els[0].index];
-    return raw ? { raw: raw } : null;
+    for (var j = 0; j < els.length; j++) {
+      var raw = chart.data.datasets[els[j].datasetIndex].data[els[j].index];
+      if (raw && raw.kind !== 'orig' && raw.kind !== 'origStart') return { raw: raw };
+    }
+    return null;
   }
 
   function onPointerDown(evt) {
@@ -1001,6 +1039,7 @@
     $('formatBtn').addEventListener('click', function () { $('formatHelp').classList.toggle('hidden'); });
     segment('metricSeg', 'metric'); segment('xSeg', 'xMode'); segment('modeSeg', 'mode');
     $('invertChk').addEventListener('change', function () { S.invert = this.checked; refreshChart(); });
+    $('origChk').addEventListener('change', function () { S.showOrig = this.checked; refreshChart(); });
 
     var cv = $('chart');
     cv.addEventListener('pointerdown', onPointerDown);
