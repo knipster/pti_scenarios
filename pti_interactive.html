@@ -1136,7 +1136,14 @@
     var el = $('accuracy');
     if (!S.eng) { el.textContent = ''; return; }
     var a = S.eng.predictive(S.orig.pti, S.orig.init);
-    el.innerHTML = 'Predictive accuracy <b>' + pct(a.current) + '</b> (original ' + pct(a.original) + ') <span class="opacity-75">• ' + num(a.current.n) + ' matches</span>';
+    var c = a.current, o = a.original, dw = c.won - o.won;
+    var rc = c.n ? c.won / c.n : 0, ro = o.n ? o.won / o.n : 0;
+    // Higher accuracy is better: green when above the original, red when below
+    var cls = rc > ro ? 'down' : rc < ro ? 'up' : '';
+    var diff = dw ? ' <span class="' + cls + '" title="Matches predicted correctly vs the original ratings">' +
+      (dw > 0 ? '+' : '−') + num(Math.abs(dw)) + ' correct</span>' : '';
+    el.innerHTML = 'Predictive accuracy <b class="' + cls + '">' + pct(c) + '</b> (original ' + pct(o) + ')' + diff +
+      ' <span class="opacity-75">• ' + num(c.n) + ' matches</span>';
   }
   function renderAll() { renderAccuracy(); refreshChart(); renderPlayers(); renderBreaks(); renderLinks(); renderMatches(); }
 
