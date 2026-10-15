@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PTI History Explorer</title>
+
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Rating engine: keep these two files next to this page -->
+  <script src="pti24-refactored.js"></script>
+  <script src="pti24-history.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'] } } }
+    };
+    // Same theme preference key as calculator2.html
+    try {
+      if (localStorage.getItem('theme') === 'light' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: light)').matches)) {
+        document.documentElement.classList.remove('dark');
+      }
+    } catch (e) {}
+  </script>
+
+  <style>
+    body { font-family: 'Inter', sans-serif; transition: background-color .3s ease, color .3s ease; }
+    html.dark body { background-color: #0b0f19; color: #f3f4f6; }
+    html:not(.dark) body { background-color: #f8fafc; color: #0f172a; }
+
+    html.dark .glass-card {
+      background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,.5), 0 8px 10px -6px rgba(0,0,0,.5);
+    }
+    html:not(.dark) .glass-card {
+      background: #ffffff; border: 1px solid #e2e8f0;
+      box-shadow: 0 4px 12px -2px rgba(0,0,0,.05), 0 2px 4px -2px rgba(0,0,0,.03);
+    }
+    html.dark .section { border-color: rgba(31,41,55,.8); background: rgba(17,24,39,.3); }
+    html:not(.dark) .section { border-color: #cbd5e1; background: #ffffff; }
+    html.dark .section-head { background: rgba(17,24,39,.6); border-color: rgba(31,41,55,.8); }
+    html:not(.dark) .section-head { background: #f1f5f9; border-color: #e2e8f0; }
+    html.dark header { background: rgba(17,24,39,.6); border-color: #1f2937; }
+    html:not(.dark) header { background: #ffffff; border-color: #e2e8f0; }
+
+    .field {
+      width: 100%; border-radius: .5rem; padding: .45rem .65rem; font-size: .8125rem;
+      border: 1px solid; transition: border-color .15s, box-shadow .15s;
+    }
+    html.dark .field { background: #1f2937; border-color: #374151; color: #f3f4f6; }
+    html:not(.dark) .field { background: #ffffff; border-color: #cbd5e1; color: #0f172a; }
+    .field:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.25); }
+    .field-sm { padding: .25rem .4rem; width: 5.25rem; font-variant-numeric: tabular-nums; }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: .4rem; padding: .4rem .75rem; border-radius: .5rem;
+      font-size: .75rem; font-weight: 600; border: 1px solid; cursor: pointer; transition: all .15s; white-space: nowrap;
+    }
+    html.dark .btn { background: #1f2937; border-color: #374151; color: #e5e7eb; }
+    html.dark .btn:hover { background: #374151; }
+    html:not(.dark) .btn { background: #f1f5f9; border-color: #cbd5e1; color: #1e293b; }
+    html:not(.dark) .btn:hover { background: #e2e8f0; }
+    .btn-primary, html.dark .btn-primary, html:not(.dark) .btn-primary { background: #4f46e5; border-color: #4f46e5; color: #fff; }
+    .btn-primary:hover, html.dark .btn-primary:hover, html:not(.dark) .btn-primary:hover { background: #4338ca; }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+    .seg { display: inline-flex; border-radius: .5rem; overflow: hidden; border: 1px solid; }
+    html.dark .seg { border-color: #374151; }
+    html:not(.dark) .seg { border-color: #cbd5e1; }
+    .seg button { padding: .35rem .7rem; font-size: .75rem; font-weight: 600; cursor: pointer; }
+    html.dark .seg button { background: #1f2937; color: #9ca3af; }
+    html:not(.dark) .seg button { background: #f8fafc; color: #64748b; }
+    .seg button.on, html.dark .seg button.on, html:not(.dark) .seg button.on { background: #4f46e5; color: #fff; }
+
+    .dropzone { border: 2px dashed; border-radius: 1rem; padding: 1rem; text-align: center; cursor: pointer; transition: all .15s; }
+    html.dark .dropzone { border-color: #374151; }
+    html:not(.dark) .dropzone { border-color: #cbd5e1; }
+    .dropzone.over, .dropzone:hover { border-color: #6366f1; background: rgba(99,102,241,.06); }
+    .dropzone.loaded { border-style: solid; border-color: rgba(16,185,129,.5); }
+
+    .muted { color: #9ca3af; }
+    html:not(.dark) .muted { color: #64748b; }
+    .label { font-size: .6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+
+    table.data { width: 100%; font-size: .78rem; border-collapse: collapse; }
+    table.data th { text-align: left; font-weight: 600; padding: .45rem .5rem; position: sticky; top: 0; z-index: 1; }
+    html.dark table.data th { background: #111827; color: #9ca3af; }
+    html:not(.dark) table.data th { background: #f1f5f9; color: #64748b; }
+    table.data td { padding: .35rem .5rem; border-top: 1px solid; font-variant-numeric: tabular-nums; }
+    html.dark table.data td { border-color: rgba(55,65,81,.5); }
+    html:not(.dark) table.data td { border-color: #e2e8f0; }
+    .num { text-align: right; }
+    .chip { display: inline-block; width: .7rem; height: .7rem; border-radius: 999px; vertical-align: middle; }
+    .up { color: #e11d48; } .down { color: #059669; }
+    html.dark .up { color: #fb7185; } html.dark .down { color: #34d399; }
+
+    #chartWrap { position: relative; height: 520px; touch-action: none; }
+    @media (max-width: 640px) { #chartWrap { height: 380px; } }
+    #chartWrap.grab { cursor: grab; } #chartWrap.grabbing { cursor: grabbing; } #chartWrap.add { cursor: crosshair; }
+    .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 1rem; }
+  </style>
+</head>
+<body class="min-h-screen antialiased">
+
+  <header class="border-b backdrop-blur-md sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+      <div class="flex items-center gap-3">
+        <div class="p-2.5 bg-indigo-600/20 border border-indigo-500/30 rounded-xl text-indigo-500 dark:text-indigo-400">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold tracking-tight flex items-center gap-2">
+            PTI History Explorer
+            <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 font-medium border border-indigo-500/30">v2.4</span>
+          </h1>
+          <p class="text-xs muted">Replay match history • Drag starting ratings and breaks to see the effect</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <button id="themeToggleBtn" type="button" class="btn">
+          <svg class="w-4 h-4 text-amber-500 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+          <svg class="w-4 h-4 text-indigo-600 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"></path></svg>
+          <span id="themeToggleLabel">Light Mode</span>
+        </button>
+        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs font-medium">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400"></span>Lower PTI = Better
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-8">
+
+    <!-- Data -->
+    <section class="section border rounded-2xl overflow-hidden">
+      <div class="section-head px-5 py-3.5 border-b flex items-center justify-between gap-3 flex-wrap">
+        <span class="text-sm font-semibold uppercase tracking-wider">Data</span>
+        <div class="flex gap-2 flex-wrap">
+          <button id="sampleBtn" type="button" class="btn">Load sample data</button>
+          <button id="formatBtn" type="button" class="btn">CSV format</button>
+        </div>
+      </div>
+      <div class="p-4 sm:p-5 space-y-4">
+        <div id="formatHelp" class="hidden glass-card rounded-xl p-4 text-xs leading-relaxed">
+          <p class="mb-2"><b>Starting ratings</b>: one row per player. Columns <code>id, pti, sigma</code>; optional <code>name</code> and <code>lastPlayed</code> (date of their match before the history starts, for break days). If the sigma is an official "Start Sigma" it already includes time decay, so leave <code>lastPlayed</code> empty.</p>
+          <p class="mb-2"><b>Matches</b>: one row per match, oldest first. Columns <code>date, player1id, player2id, player3id, player4id, score</code>. Players 1 and 2 are a team; the score is from their side, sets separated by commas (quote it), e.g. <code>"6-3, 4-6, 1-0"</code>. Dates as <code>YYYY-MM-DD</code> or <code>M/D/YYYY</code>.</p>
+          <p>Files can be dropped on the boxes below, chosen from disk, or loaded from URLs. URLs can also go in this page's address: <code>pti_interactive.html?ratings=ratings.csv&amp;matches=matches.csv</code>. URLs on another site need that site to allow cross-origin requests.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="glass-card rounded-2xl p-4 border-t-2 border-t-indigo-500 space-y-3">
+            <div class="label muted">Starting ratings CSV</div>
+            <label id="ratingsDrop" class="dropzone block">
+              <input id="ratingsFile" type="file" accept=".csv,text/csv,text/plain" class="hidden">
+              <div class="text-sm font-medium">Drop a file or click to choose</div>
+              <div id="ratingsInfo" class="text-xs muted mt-1">id, pti, sigma [, name, lastPlayed]</div>
+            </label>
+            <input id="ratingsUrl" class="field" type="url" placeholder="…or a URL, e.g. data/ratings.csv">
+          </div>
+          <div class="glass-card rounded-2xl p-4 border-t-2 border-t-rose-500 space-y-3">
+            <div class="label muted">Matches CSV</div>
+            <label id="matchesDrop" class="dropzone block">
+              <input id="matchesFile" type="file" accept=".csv,text/csv,text/plain" class="hidden">
+              <div class="text-sm font-medium">Drop a file or click to choose</div>
+              <div id="matchesInfo" class="text-xs muted mt-1">date, player1id … player4id, score</div>
+            </label>
+            <input id="matchesUrl" class="field" type="url" placeholder="…or a URL, e.g. data/matches.csv">
+          </div>
+        </div>
+        <div class="flex items-center gap-3 flex-wrap">
+          <button id="loadUrlsBtn" type="button" class="btn btn-primary">Load URLs</button>
+          <span id="status" class="text-xs muted" role="status"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Chart -->
+    <section class="section border rounded-2xl overflow-hidden">
+      <div class="section-head px-5 py-3.5 border-b flex items-center justify-between gap-3 flex-wrap">
+        <span class="text-sm font-semibold uppercase tracking-wider">Ratings over time</span>
+        <div class="flex items-center gap-2 flex-wrap">
+          <div class="seg" id="metricSeg"><button data-v="Pti" class="on">PTI</button><button data-v="Sigma">Sigma</button></div>
+          <div class="seg" id="xSeg"><button data-v="date" class="on">By date</button><button data-v="index">By match #</button></div>
+          <div class="seg" id="modeSeg" title="Move: drag starting points and breaks. Add break: click a match point."><button data-v="move" class="on">Move</button><button data-v="add">Add break</button></div>
+          <label class="btn"><input id="invertChk" type="checkbox" class="accent-indigo-600"> Better = up</label>
+        </div>
+      </div>
+      <div class="p-4 sm:p-5 space-y-3">
+        <p id="hint" class="text-xs muted">Drag a player's first point (●) to change their starting rating. Switch to <b>Add break</b> and click a match point to insert a break (◆) before that match, then drag it. Double-click a break to remove it. Shift-click also adds a break.</p>
+        <div id="chartWrap">
+          <canvas id="chart" aria-label="Player ratings over time" role="img"></canvas>
+          <div id="emptyMsg" class="empty text-sm muted">Load the two CSV files, or the sample data, to see the chart.</div>
+        </div>
+        <div class="flex gap-2 flex-wrap">
+          <button id="resetStartsBtn" type="button" class="btn">Reset starting ratings</button>
+          <button id="clearBreaksBtn" type="button" class="btn">Remove all breaks</button>
+          <button id="downloadBtn" type="button" class="btn">Download results CSV</button>
+          <button id="downloadStartsBtn" type="button" class="btn">Download starting ratings CSV</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <!-- Players -->
+      <section class="section border rounded-2xl overflow-hidden lg:col-span-2">
+        <div class="section-head px-5 py-3.5 border-b flex items-center justify-between gap-3 flex-wrap">
+          <span class="text-sm font-semibold uppercase tracking-wider">Players <span id="selCount" class="muted normal-case font-normal"></span></span>
+          <input id="playerSearch" class="field" style="max-width: 14rem" placeholder="Search players">
+        </div>
+        <div class="max-h-[28rem] overflow-auto">
+          <table class="data">
+            <thead><tr>
+              <th>Show</th><th>Player</th><th class="num">Matches</th>
+              <th class="num">Start PTI</th><th class="num">Start sigma</th>
+              <th class="num">Now PTI</th><th class="num">Change</th><th class="num">Now sigma</th>
+            </tr></thead>
+            <tbody id="playersBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Breaks -->
+      <section class="section border rounded-2xl overflow-hidden">
+        <div class="section-head px-5 py-3.5 border-b">
+          <span class="text-sm font-semibold uppercase tracking-wider">Breaks</span>
+        </div>
+        <div id="breaksList" class="p-4 space-y-2 max-h-[28rem] overflow-auto text-sm"></div>
+      </section>
+    </div>
+
+    <!-- Matches -->
+    <section class="section border rounded-2xl overflow-hidden">
+      <div class="section-head px-5 py-3.5 border-b flex items-center justify-between gap-3 flex-wrap">
+        <span class="text-sm font-semibold uppercase tracking-wider">Matches for shown players</span>
+        <span id="matchesCount" class="text-xs muted"></span>
+      </div>
+      <div class="max-h-[32rem] overflow-auto">
+        <table class="data">
+          <thead><tr><th>#</th><th>Date</th><th>Team 1</th><th>Team 2</th><th>Score</th><th>Shown players: start → end PTI (sigma)</th></tr></thead>
+          <tbody id="matchesBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8 text-xs muted">
+    Ratings computed in your browser with pti24-refactored.js and pti24-history.js. Nothing is uploaded.
+  </footer>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- State ----------
+  var S = {
+    ratingsText: null, matchesText: null,
+    players: [],         // [{ id, name, pti, sigma, lastPlayed }] as loaded
+    starts: {},          // id -> { pti, sigma, lastPlayed } (editable)
+    matches: [],         // match rows as loaded
+    overrides: [],       // [{ id, matchIndex, pti?, sigma? }]
+    result: null,        // pti24History output
+    selected: [],        // ids shown on the chart, max 8
+    slot: {},            // id -> colour slot 0..7 (kept while shown)
+    metric: 'Pti', xMode: 'date', mode: 'move', invert: false,
+    search: ''
+  };
+  var MAX_SHOWN = 8;
+  // Categorical palette (fixed order), light and dark steps
+  var PALETTE = {
+    light: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'],
+    dark:  ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767']
+  };
+  var DAY = 86400000;
+
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function isDark() { return document.documentElement.classList.contains('dark'); }
+  function colorOf(id) { return PALETTE[isDark() ? 'dark' : 'light'][S.slot[id]]; }
+  function nameOf(id) { var p = S.players.find(function (x) { return x.id === id; }); return p && p.name ? p.name : id; }
+  function fmt(v, d) { return v == null || isNaN(v) ? '–' : (+v).toFixed(d == null ? 2 : d); }
+  function setStatus(msg, bad) { var el = $('status'); el.textContent = msg; el.style.color = bad ? '#f43f5e' : ''; }
+
+  // ---------- CSV ----------
+  function parseCsv(text) {
+    text = String(text).replace(/^﻿/, '');
+    var rows = [], row = [], field = '', q = false;
+    for (var i = 0; i < text.length; i++) {
+      var c = text[i];
+      if (q) {
+        if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; }
+        else field += c;
+      } else if (c === '"') q = true;
+      else if (c === ',') { row.push(field); field = ''; }
+      else if (c === '\n' || c === '\r') {
+        if (c === '\r' && text[i + 1] === '\n') i++;
+        row.push(field); field = '';
+        if (row.some(function (f) { return f.trim() !== ''; })) rows.push(row);
+        row = [];
+      } else field += c;
+    }
+    row.push(field);
+    if (row.some(function (f) { return f.trim() !== ''; })) rows.push(row);
+    if (!rows.length) return [];
+    var head = rows[0].map(function (h) { return h.trim().toLowerCase().replace(/[^a-z0-9]/g, ''); });
+    return rows.slice(1).map(function (r) {
+      var o = {}; head.forEach(function (h, i) { o[h] = (r[i] || '').trim(); }); return o;
+    });
+  }
+  function pick(o, names) { for (var i = 0; i < names.length; i++) if (o[names[i]] !== undefined && o[names[i]] !== '') return o[names[i]]; return ''; }
+
+  function readRatings(text) {
+    var out = [], bad = 0;
+    parseCsv(text).forEach(function (o) {
+      var id = pick(o, ['id', 'playerid', 'player']);
+      var pti = parseFloat(pick(o, ['pti', 'rating', 'startpti', 'startrating']));
+      var sigma = parseFloat(pick(o, ['sigma', 'startsigma', 'volatility']));
+      if (!id || isNaN(pti) || isNaN(sigma)) { bad++; return; }
+      out.push({ id: id, name: pick(o, ['name', 'playername']) || id, pti: pti, sigma: sigma,
+                 lastPlayed: pick(o, ['lastplayed', 'lastdate', 'lastmatch']) || null });
+    });
+    if (!out.length) throw new Error('No usable rows in the ratings CSV (need id, pti, sigma columns).');
+    return { rows: out, bad: bad };
+  }
+  function readMatches(text) {
+    var out = [];
+    parseCsv(text).forEach(function (o) {
+      out.push({
+        date: pick(o, ['date', 'matchdate']),
+        player1id: pick(o, ['player1id', 'player1', 'p1', 'p1id']),
+        player2id: pick(o, ['player2id', 'player2', 'p2', 'p2id']),
+        player3id: pick(o, ['player3id', 'player3', 'p3', 'p3id']),
+        player4id: pick(o, ['player4id', 'player4', 'p4', 'p4id']),
+        score: pick(o, ['score', 'scores', 'setscores'])
+      });
+    });
+    if (!out.length) throw new Error('No rows in the matches CSV.');
+    if (!out[0].player1id || !out[0].score) throw new Error('Matches CSV needs date, player1id … player4id and score columns.');
+    return out;
+  }
+
+  // ---------- Loading ----------
+  function tryBuild() {
+    if (S.ratingsText == null || S.matchesText == null) return;
+    try {
+      var r = readRatings(S.ratingsText), m = readMatches(S.matchesText);
+      S.players = r.rows;
+      S.starts = {};
+      r.rows.forEach(function (p) { S.starts[p.id] = { pti: p.pti, sigma: p.sigma, lastPlayed: p.lastPlayed }; });
+      S.matches = m; S.overrides = []; S.selected = []; S.slot = {};
+      run();
+      // Show the most active players first
+      var counts = {};
+      Object.keys(S.result.ratings).forEach(function (id) { counts[id] = S.result.ratings[id].matches; });
+      S.players.slice().sort(function (a, b) { return counts[b.id] - counts[a.id]; })
+        .slice(0, Math.min(5, S.players.length)).forEach(function (p) { toggle(p.id, true); });
+      var errs = S.result.matches.filter(function (x) { return x.error; }).length;
+      setStatus(S.players.length + ' players, ' + S.matches.length + ' matches loaded' +
+        (r.bad ? ', ' + r.bad + ' rating rows skipped' : '') + (errs ? ', ' + errs + ' matches not rated (see table)' : '') + '.', false);
+      renderAll();
+    } catch (e) { setStatus(e.message, true); }
+  }
+  function setText(kind, text, label) {
+    if (kind === 'ratings') S.ratingsText = text; else S.matchesText = text;
+    $(kind + 'Info').textContent = label;
+    $(kind + 'Drop').classList.add('loaded');
+    tryBuild();
+  }
+  function wireDrop(kind) {
+    var zone = $(kind + 'Drop'), input = $(kind + 'File');
+    function take(file) { if (file) file.text().then(function (t) { setText(kind, t, file.name); }); }
+    input.addEventListener('change', function () { take(input.files[0]); });
+    zone.addEventListener('dragover', function (e) { e.preventDefault(); zone.classList.add('over'); });
+    zone.addEventListener('dragleave', function () { zone.classList.remove('over'); });
+    zone.addEventListener('drop', function (e) { e.preventDefault(); zone.classList.remove('over'); take(e.dataTransfer.files[0]); });
+  }
+  function fetchText(url) {
+    return fetch(url).then(function (r) { if (!r.ok) throw new Error(url + ': HTTP ' + r.status); return r.text(); });
+  }
+  function loadUrls(rUrl, mUrl) {
+    if (!rUrl && !mUrl) { setStatus('Enter at least one URL.', true); return; }
+    setStatus('Loading…');
+    Promise.all([rUrl ? fetchText(rUrl) : null, mUrl ? fetchText(mUrl) : null]).then(function (t) {
+      if (t[0] != null) { S.ratingsText = t[0]; $('ratingsInfo').textContent = rUrl; $('ratingsDrop').classList.add('loaded'); }
+      if (t[1] != null) { S.matchesText = t[1]; $('matchesInfo').textContent = mUrl; $('matchesDrop').classList.add('loaded'); }
+      if (S.ratingsText == null || S.matchesText == null) setStatus('Loaded one file; add the other.');
+      tryBuild();
+    }).catch(function (e) { setStatus('Could not load: ' + e.message + ' (a URL on another site must allow cross-origin requests).', true); });
+  }
+
+  // ---------- Engine ----------
+  function run() {
+    S.result = pti24History(S.starts, S.matches, { overrides: S.overrides });
+  }
+
+  // x position of each match: its day, with same-day matches spread a little to keep their order
+  function matchX() {
+    var xs = [], lastDay = null, n = 0;
+    S.matches.forEach(function (m, k) {
+      if (S.xMode === 'index') { xs.push(k + 1); return; }
+      var d = dayMs(m.date);
+      if (d === lastDay) n++; else { n = 0; lastDay = d; }
+      xs.push(d == null ? null : d + n * DAY / 6);
+    });
+    return xs;
+  }
+  function dayMs(s) {
+    var m;
+    s = String(s || '').trim();
+    if ((m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s))) return Date.UTC(+m[1], m[2] - 1, +m[3]);
+    if ((m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s))) return Date.UTC(+m[3], m[1] - 1, +m[2]);
+    var t = Date.parse(s); return isNaN(t) ? null : t;
+  }
+  function findOverride(id, k) { return S.overrides.find(function (o) { return o.id === id && o.matchIndex === k; }); }
+
+  function seriesFor(id, xs, gap) {
+    var pts = [], rows = S.result.matches, key = S.metric, first = true, prevX = null;
+    rows.forEach(function (row, k) {
+      if (row.error && !('player1EndPti' in row)) return;
+      var n = [row.player1id, row.player2id, row.player3id, row.player4id].indexOf(id) + 1;
+      if (!n || xs[k] == null) return;
+      var x = xs[k];
+      if (first) {
+        pts.push({ x: x - gap, y: S.starts[id][key === 'Pti' ? 'pti' : 'sigma'], kind: 'start', id: id });
+        first = false; prevX = x - gap;
+      }
+      var o = findOverride(id, k), field = key === 'Pti' ? 'pti' : 'sigma';
+      if (o && o[field] != null) {
+        pts.push({ x: x - Math.min(gap / 2, (x - prevX) / 2), y: o[field], kind: 'break', id: id, k: k });
+      }
+      pts.push({ x: x, y: row['player' + n + 'End' + key], kind: 'match', id: id, k: k, n: n });
+      prevX = x;
+    });
+    return pts;
+  }
+
+  // ---------- Chart ----------
+  var chart = null, drag = null, frame = null, lastClick = { t: 0 };
+
+  function themeColors() {
+    return isDark()
+      ? { text: '#c3c2b7', grid: 'rgba(255,255,255,0.07)', surface: '#111827' }
+      : { text: '#475569', grid: 'rgba(15,23,42,0.07)', surface: '#ffffff' };
+  }
+  function fmtDate(ms) { var d = new Date(ms); return d.toISOString().slice(0, 10); }
+
+  function buildDatasets() {
+    var xs = matchX(), valid = xs.filter(function (v) { return v != null; });
+    var span = valid.length ? Math.max(valid[valid.length - 1] - valid[0], 1) : 1;
+    var gap = S.xMode === 'index' ? 0.6 : Math.max(DAY * 3, span * 0.015);
+    var surface = themeColors().surface;
+    return S.selected.map(function (id) {
+      var c = colorOf(id);
+      return {
+        label: nameOf(id), data: seriesFor(id, xs, gap), _id: id,
+        borderColor: c, backgroundColor: c, borderWidth: 2, tension: 0,
+        pointBorderColor: surface, pointBorderWidth: 2,
+        pointRadius: function (ctx) { var r = ctx.raw; return !r ? 3 : r.kind === 'start' ? 6 : r.kind === 'break' ? 7 : 3; },
+        pointHoverRadius: function (ctx) { var r = ctx.raw; return !r ? 5 : r.kind === 'match' ? 5 : 9; },
+        pointHitRadius: 8,
+        pointStyle: function (ctx) { return ctx.raw && ctx.raw.kind === 'break' ? 'rectRot' : 'circle'; },
+        segment: {
+          borderDash: function (ctx) { return ctx.p1.raw && ctx.p1.raw.kind === 'break' ? [4, 4] : undefined; }
+        }
+      };
+    });
+  }
+
+  function tooltipLines(raw) {
+    if (raw.kind === 'start') return ['Starting ' + (S.metric === 'Pti' ? 'PTI' : 'sigma') + ': ' + fmt(raw.y), 'Drag to change'];
+    if (raw.kind === 'break') return ['Break before match #' + (raw.k + 1) + ': ' + fmt(raw.y), 'Drag to move, double-click to remove'];
+    var row = S.result.matches[raw.k], n = raw.n, p = 'player' + n;
+    var mine = n <= 2 ? [1, 2] : [3, 4], them = n <= 2 ? [3, 4] : [1, 2];
+    var partner = mine.find(function (i) { return i !== n; });
+    return [
+      'Match #' + (raw.k + 1) + ' • ' + row.score,
+      'With ' + nameOf(row['player' + partner + 'id']) + ' vs ' + nameOf(row['player' + them[0] + 'id']) + ' & ' + nameOf(row['player' + them[1] + 'id']),
+      'PTI ' + fmt(row[p + 'StartPti']) + ' → ' + fmt(row[p + 'EndPti']) + ' (' + (row[p + 'Delta'] >= 0 ? '+' : '') + fmt(row[p + 'Delta']) + ')',
+      'Sigma ' + fmt(row[p + 'StartSigma']) + ' → ' + fmt(row[p + 'EndSigma']) + ' • ' + row[p + 'BreakDays'] + ' days since last match'
+    ];
+  }
+
+  function makeChart() {
+    var tc = themeColors();
+    chart = new Chart($('chart'), {
+      type: 'line',
+      data: { datasets: buildDatasets() },
+      options: {
+        animation: false, responsive: true, maintainAspectRatio: false, parsing: false, normalized: true,
+        interaction: { mode: 'nearest', intersect: true },
+        scales: {
+          x: {
+            type: 'linear', grid: { color: tc.grid }, border: { display: false },
+            ticks: { color: tc.text, maxTicksLimit: 8, callback: function (v) { return S.xMode === 'index' ? (Number.isInteger(v) ? '#' + v : '') : fmtDate(v); } },
+            title: { display: true, text: S.xMode === 'index' ? 'Match #' : 'Date', color: tc.text }
+          },
+          y: {
+            reverse: S.invert, grid: { color: tc.grid }, border: { display: false },
+            ticks: { color: tc.text },
+            title: { display: true, text: S.metric === 'Pti' ? 'PTI' : 'Sigma', color: tc.text }
+          }
+        },
+        plugins: {
+          legend: { position: 'top', align: 'start', labels: { color: tc.text, usePointStyle: true, pointStyle: 'circle', boxWidth: 8, boxHeight: 8, padding: 14 } },
+          tooltip: {
+            enabled: true, displayColors: true, padding: 10,
+            callbacks: {
+              title: function (items) {
+                var r = items[0].raw; if (!r) return '';
+                var head = nameOf(r.id);
+                if (r.kind === 'match') head += ' • ' + S.result.matches[r.k].date;
+                return head;
+              },
+              label: function (item) { return item.raw ? tooltipLines(item.raw) : ''; }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  function refreshChart() {
+    $('emptyMsg').style.display = S.result && S.selected.length ? 'none' : 'flex';
+    if (!S.result) return;
+    if (!chart) makeChart();
+    var ds = buildDatasets();
+    // Update datasets in place so a drag in progress keeps its target
+    chart.data.datasets = ds;
+    var tc = themeColors();
+    var o = chart.options;
+    o.scales.y.reverse = S.invert;
+    o.scales.y.title.text = S.metric === 'Pti' ? 'PTI' : 'Sigma';
+    o.scales.x.title.text = S.xMode === 'index' ? 'Match #' : 'Date';
+    [o.scales.x, o.scales.y].forEach(function (a) { a.ticks.color = tc.text; a.grid.color = tc.grid; a.title.color = tc.text; });
+    o.plugins.legend.labels.color = tc.text;
+    if (drag) { o.scales.y.min = drag.yMin; o.scales.y.max = drag.yMax; }
+    else { delete o.scales.y.min; delete o.scales.y.max; }
+    chart.update('none');
+  }
+
+  function hit(evt) {
+    if (!chart) return null;
+    var els = chart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, false);
+    if (!els.length) return null;
+    var e = els[0], raw = chart.data.datasets[e.datasetIndex].data[e.index];
+    return raw ? { raw: raw } : null;
+  }
+
+  function onPointerDown(evt) {
+    var h = hit(evt);
+    if (!h) return;
+    var raw = h.raw, now = Date.now();
+    // Double-click / double-tap on a break removes it
+    if (raw.kind === 'break' && lastClick.raw && lastClick.raw.kind === 'break' && lastClick.raw.id === raw.id && lastClick.raw.k === raw.k && now - lastClick.t < 350) {
+      removeOverride(raw.id, raw.k); lastClick = { t: 0 }; return;
+    }
+    lastClick = { t: now, raw: raw };
+    if (raw.kind === 'match' && (S.mode === 'add' || evt.shiftKey)) { addOverride(raw.id, raw.k); return; }
+    if (raw.kind === 'start' || raw.kind === 'break') {
+      drag = { raw: raw, yMin: chart.scales.y.min, yMax: chart.scales.y.max };
+      $('chartWrap').classList.add('grabbing');
+      $('chart').setPointerCapture(evt.pointerId);
+      evt.preventDefault();
+    }
+  }
+  function onPointerMove(evt) {
+    if (!drag) {
+      var h = hit(evt), w = $('chartWrap');
+      w.classList.toggle('grab', !!h && (h.raw.kind === 'start' || h.raw.kind === 'break'));
+      w.classList.toggle('add', !!h && h.raw.kind === 'match' && (S.mode === 'add' || evt.shiftKey));
+      return;
+    }
+    var rect = $('chart').getBoundingClientRect();
+    var v = chart.scales.y.getValueForPixel(evt.clientY - rect.top);
+    var lo = S.metric === 'Pti' ? -10 : 0.01, hi = S.metric === 'Pti' ? 120 : 10;
+    v = Math.round(Math.min(hi, Math.max(lo, v)) * 100) / 100;
+    var field = S.metric === 'Pti' ? 'pti' : 'sigma';
+    if (drag.raw.kind === 'start') S.starts[drag.raw.id][field] = v;
+    else { var o = findOverride(drag.raw.id, drag.raw.k); if (o) o[field] = v; }
+    if (!frame) frame = requestAnimationFrame(function () { frame = null; run(); refreshChart(); renderPlayers(); renderBreaks(); });
+  }
+  function onPointerUp() {
+    if (!drag) return;
+    drag = null;
+    $('chartWrap').classList.remove('grabbing');
+    run(); renderAll();
+  }
+
+  function addOverride(id, k) {
+    var field = S.metric === 'Pti' ? 'pti' : 'sigma', o = findOverride(id, k);
+    if (o && o[field] != null) return;
+    var row = S.result.matches[k], n = [row.player1id, row.player2id, row.player3id, row.player4id].indexOf(id) + 1;
+    if (!o) { o = { id: id, matchIndex: k }; S.overrides.push(o); }
+    o[field] = +(+row['player' + n + 'Start' + S.metric]).toFixed(2);
+    S.overrides.sort(function (a, b) { return a.matchIndex - b.matchIndex; });
+    run(); renderAll();
+  }
+  function removeOverride(id, k) {
+    S.overrides = S.overrides.filter(function (o) { return !(o.id === id && o.matchIndex === k); });
+    run(); renderAll();
+  }
+
+  // ---------- Players / breaks / matches tables ----------
+  function toggle(id, on) {
+    var i = S.selected.indexOf(id);
+    if (on && i < 0) {
+      if (S.selected.length >= MAX_SHOWN) return;
+      var used = S.selected.map(function (x) { return S.slot[x]; });
+      for (var s = 0; s < MAX_SHOWN; s++) if (used.indexOf(s) < 0) { S.slot[id] = s; break; }
+      S.selected.push(id);
+    } else if (!on && i >= 0) {
+      S.selected.splice(i, 1); delete S.slot[id];
+    }
+  }
+
+  function renderPlayers() {
+    var body = $('playersBody');
+    if (!S.result) { body.innerHTML = ''; return; }
+    var q = S.search.toLowerCase(), full = S.selected.length >= MAX_SHOWN;
+    // Keep inputs that are being typed in
+    var active = document.activeElement && body.contains(document.activeElement) ? document.activeElement : null;
+    if (active && active.tagName === 'INPUT' && active.type === 'number') { updatePlayerNumbers(); return; }
+    body.innerHTML = S.players.filter(function (p) {
+      return !q || p.id.toLowerCase().indexOf(q) >= 0 || p.name.toLowerCase().indexOf(q) >= 0;
+    }).map(function (p) {
+      var shown = S.selected.indexOf(p.id) >= 0, r = S.result.ratings[p.id], st = S.starts[p.id];
+      var ch = r.pti - st.pti;
+      return '<tr data-id="' + esc(p.id) + '">' +
+        '<td><input type="checkbox" class="show accent-indigo-600"' + (shown ? ' checked' : '') + (!shown && full ? ' disabled title="Up to 8 players at a time"' : '') + '></td>' +
+        '<td>' + (shown ? '<span class="chip" style="background:' + colorOf(p.id) + '"></span> ' : '') + esc(p.name) + (p.name !== p.id ? ' <span class="muted">' + esc(p.id) + '</span>' : '') + '</td>' +
+        '<td class="num">' + r.matches + '</td>' +
+        '<td class="num"><input type="number" step="0.01" class="field field-sm start-pti" value="' + fmt(st.pti) + '"></td>' +
+        '<td class="num"><input type="number" step="0.01" min="0.01" class="field field-sm start-sigma" value="' + fmt(st.sigma) + '"></td>' +
+        '<td class="num now-pti">' + fmt(r.pti) + '</td>' +
+        '<td class="num now-ch ' + (ch > 0.005 ? 'up' : ch < -0.005 ? 'down' : '') + '">' + (ch >= 0 ? '+' : '') + fmt(ch) + '</td>' +
+        '<td class="num now-sigma">' + fmt(r.sigma) + '</td></tr>';
+    }).join('');
+    $('selCount').textContent = '(' + S.selected.length + ' of ' + MAX_SHOWN + ' shown)';
+  }
+  function updatePlayerNumbers() {
+    Array.prototype.forEach.call($('playersBody').querySelectorAll('tr'), function (tr) {
+      var id = tr.getAttribute('data-id'), r = S.result.ratings[id], st = S.starts[id];
+      if (!r) return;
+      var ch = r.pti - st.pti, el = tr.querySelector('.now-ch');
+      tr.querySelector('.now-pti').textContent = fmt(r.pti);
+      tr.querySelector('.now-sigma').textContent = fmt(r.sigma);
+      el.textContent = (ch >= 0 ? '+' : '') + fmt(ch);
+      el.className = 'num now-ch ' + (ch > 0.005 ? 'up' : ch < -0.005 ? 'down' : '');
+      [['.start-pti', st.pti], ['.start-sigma', st.sigma]].forEach(function (a) {
+        var inp = tr.querySelector(a[0]); if (inp !== document.activeElement) inp.value = fmt(a[1]);
+      });
+    });
+  }
+
+  function renderBreaks() {
+    var el = $('breaksList');
+    if (!S.overrides.length) {
+      el.innerHTML = '<p class="muted text-xs">No breaks. Use <b>Add break</b> on the chart and click a match point to set a player\'s PTI or sigma just before that match.</p>';
+      return;
+    }
+    if (el.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;
+    el.innerHTML = S.overrides.map(function (o, i) {
+      var m = S.matches[o.matchIndex];
+      return '<div class="glass-card rounded-xl p-3" data-i="' + i + '">' +
+        '<div class="flex items-center justify-between gap-2 mb-2"><span class="font-medium">' +
+        (S.slot[o.id] != null ? '<span class="chip" style="background:' + colorOf(o.id) + '"></span> ' : '') + esc(nameOf(o.id)) +
+        '</span><button type="button" class="btn rm" title="Remove break">Remove</button></div>' +
+        '<div class="text-xs muted mb-2">Before match #' + (o.matchIndex + 1) + ' • ' + esc(m.date) + ' • ' + esc(m.score) + '</div>' +
+        '<div class="flex gap-3 text-xs items-center">' +
+        '<label>PTI <input type="number" step="0.01" class="field field-sm b-pti" placeholder="keep" value="' + (o.pti != null ? fmt(o.pti) : '') + '"></label>' +
+        '<label>Sigma <input type="number" step="0.01" min="0.01" class="field field-sm b-sigma" placeholder="keep" value="' + (o.sigma != null ? fmt(o.sigma) : '') + '"></label>' +
+        '</div></div>';
+    }).join('');
+  }
+
+  function renderMatches() {
+    var body = $('matchesBody');
+    if (!S.result) { body.innerHTML = ''; $('matchesCount').textContent = ''; return; }
+    var shown = {}; S.selected.forEach(function (id) { shown[id] = true; });
+    var rows = [];
+    S.result.matches.forEach(function (row, k) {
+      var ids = [row.player1id, row.player2id, row.player3id, row.player4id];
+      if (row.error || ids.some(function (id) { return shown[id]; })) rows.push([row, k, ids]);
+    });
+    $('matchesCount').textContent = rows.length + ' matches' + (rows.length > 300 ? ', latest 300 shown' : '');
+    body.innerHTML = rows.slice(-300).reverse().map(function (x) {
+      var row = x[0], k = x[1], ids = x[2];
+      var cells = row.error && !('player1EndPti' in row)
+        ? '<span class="up">' + esc(row.error) + '</span>'
+        : ids.map(function (id, i) {
+            if (!shown[id]) return '';
+            var p = 'player' + (i + 1), d = row[p + 'Delta'], br = findOverride(id, k);
+            return '<span class="whitespace-nowrap mr-3"><span class="chip" style="background:' + colorOf(id) + '"></span> ' +
+              esc(nameOf(id)) + ': ' + (br ? '◆ ' : '') + fmt(row[p + 'StartPti']) + ' → ' + fmt(row[p + 'EndPti']) +
+              ' <span class="' + (d > 0.005 ? 'up' : d < -0.005 ? 'down' : '') + '">(' + (d >= 0 ? '+' : '') + fmt(d) + ')</span>' +
+              ' <span class="muted">σ ' + fmt(row[p + 'EndSigma']) + '</span></span>';
+          }).join('');
+      return '<tr><td class="muted">' + (k + 1) + '</td><td class="whitespace-nowrap">' + esc(row.date) + '</td>' +
+        '<td>' + esc(nameOf(ids[0])) + ' & ' + esc(nameOf(ids[1])) + '</td><td>' + esc(nameOf(ids[2])) + ' & ' + esc(nameOf(ids[3])) + '</td>' +
+        '<td class="whitespace-nowrap">' + esc(row.score) + '</td><td>' + cells + '</td></tr>';
+    }).join('');
+  }
+
+  function renderAll() { refreshChart(); renderPlayers(); renderBreaks(); renderMatches(); }
+
+  // ---------- Downloads ----------
+  function csvCell(v) { v = v == null ? '' : typeof v === 'number' ? String(Math.round(v * 10000) / 10000) : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+  function download(name, text) {
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv' }));
+    a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+  }
+  function downloadResults() {
+    if (!S.result) return;
+    var cols = ['date', 'player1id', 'player2id', 'player3id', 'player4id', 'score'];
+    [1, 2, 3, 4].forEach(function (n) { ['StartPti', 'StartSigma', 'BreakDays', 'EndPti', 'EndSigma', 'Delta'].forEach(function (c) { cols.push('player' + n + c); }); });
+    cols.push('error');
+    download('pti-results.csv', cols.join(',') + '\n' + S.result.matches.map(function (r) {
+      return cols.map(function (c) { return csvCell(r[c]); }).join(',');
+    }).join('\n') + '\n');
+  }
+  function downloadStarts() {
+    if (!S.result) return;
+    download('pti-starting-ratings.csv', 'id,name,pti,sigma,lastPlayed\n' + S.players.map(function (p) {
+      var s = S.starts[p.id]; return [p.id, p.name, s.pti, s.sigma, s.lastPlayed || ''].map(csvCell).join(',');
+    }).join('\n') + '\n');
+  }
+
+  // ---------- Sample data (fictional players) ----------
+  var SAMPLE_RATINGS = 'id,name,pti,sigma\nP01,Avery Hale,18,4.5\nP02,Blake Moreno,26.7,2.73\nP03,Casey Ruiz,39.9,3.53\nP04,Devon Park,27.9,4.08\nP05,Emery Shaw,40.7,3.56\nP06,Finley Cross,38.5,3.79\nP07,Harper Lane,42.5,2.81\nP08,Jordan Price,29.2,3.97\nP09,Kendall Ross,38.9,2.33\nP10,Logan Reyes,38.5,3.37\n';
+  var SAMPLE_MATCHES = "date,player1id,player2id,player3id,player4id,score\n2025-04-06,P09,P06,P01,P03,\"4-6, 3-6\"\n2025-04-10,P01,P09,P02,P10,\"6-2, 0-6, 4-6\"\n2025-04-16,P04,P03,P09,P08,\"6-4, 6-2\"\n2025-04-18,P06,P03,P04,P02,\"6-7, 2-6\"\n2025-04-22,P05,P02,P09,P04,\"0-6, 0-6\"\n2025-04-26,P01,P02,P08,P07,\"6-4, 6-3\"\n2025-05-02,P07,P06,P05,P10,\"3-6, 6-1, 6-0\"\n2025-05-07,P09,P10,P06,P01,\"3-6, 2-6\"\n2025-05-13,P05,P01,P02,P03,\"6-0, 4-6, 6-7\"\n2025-05-15,P01,P02,P09,P08,\"6-1, 7-6\"\n2025-05-21,P05,P08,P04,P03,\"4-6, 3-6\"\n2025-05-26,P01,P05,P07,P04,\"2-6, 3-6\"\n2025-06-01,P10,P06,P04,P09,\"6-0, 0-6, 2-6\"\n2025-06-06,P10,P01,P02,P03,\"6-1, 6-3\"\n2025-06-07,P02,P08,P05,P07,\"6-1, 7-6\"\n2025-06-13,P01,P02,P03,P08,\"6-0, 6-4\"\n2025-06-19,P04,P08,P01,P02,\"3-6, 6-0, 6-0\"\n2025-06-23,P09,P06,P05,P08,\"3-6, 2-6\"\n2025-06-28,P02,P01,P03,P07,\"7-6, 6-3\"\n2025-07-02,P01,P02,P03,P04,\"6-1, 6-2\"\n2025-07-06,P06,P05,P01,P04,\"2-6, 0-6\"\n2025-07-07,P04,P09,P10,P01,\"4-6, 6-0, 3-6\"\n2025-07-08,P03,P08,P09,P02,\"6-0, 0-6, 1-6\"\n2025-07-12,P03,P07,P06,P08,\"6-2, 6-0\"\n2025-07-13,P03,P01,P05,P04,\"3-6, 1-6\"\n2025-07-19,P01,P06,P02,P03,\"4-6, 4-6\"\n2025-07-20,P10,P06,P07,P05,\"6-3, 4-6, 6-0\"\n2025-07-25,P08,P07,P10,P06,\"6-3, 2-6, 6-0\"\n2025-07-26,P06,P05,P04,P03,\"1-6, 2-6\"\n2025-07-30,P01,P02,P06,P09,\"6-2, 6-0\"\n2025-08-01,P08,P01,P09,P03,\"6-3, 6-4\"\n2025-08-06,P10,P04,P01,P08,\"2-6, 3-6\"\n2025-08-12,P04,P06,P08,P02,\"1-6, 2-6\"\n2025-08-17,P08,P01,P09,P04,\"6-0, 7-6\"\n2025-08-20,P01,P09,P02,P07,\"6-7, 3-6\"\n2025-08-25,P07,P01,P02,P03,\"0-6, 6-2, 6-0\"\n2025-08-28,P01,P06,P08,P07,\"6-3, 6-3\"\n2025-09-03,P04,P06,P01,P05,\"3-6, 3-6\"\n2025-09-04,P07,P10,P08,P01,\"4-6, 6-7\"\n2025-09-09,P06,P01,P02,P04,\"6-1, 2-6, 1-6\"\n2025-09-13,P01,P07,P08,P04,\"0-6, 4-6\"\n2025-09-16,P10,P05,P06,P07,\"3-6, 1-6\"\n2025-09-20,P01,P05,P08,P02,\"0-6, 6-7\"\n2025-09-21,P01,P08,P04,P07,\"6-3, 0-6, 6-0\"\n2025-09-24,P02,P01,P04,P05,\"6-1, 6-3\"\n2025-09-26,P10,P06,P09,P01,\"2-6, 6-1, 4-6\"\n2025-10-02,P05,P08,P07,P04,\"2-6, 0-6\"\n2025-10-06,P10,P08,P05,P01,\"1-6, 6-4, 2-6\"\n2025-10-10,P10,P02,P07,P04,\"4-6, 6-4, 2-6\"\n2025-10-12,P08,P02,P01,P07,\"6-0, 7-6\"\n2025-10-13,P06,P10,P04,P03,\"2-6, 3-6\"\n2025-10-15,P08,P05,P06,P04,\"6-0, 1-6, 6-3\"\n2025-10-21,P01,P02,P10,P03,\"6-1, 6-1\"\n2025-10-26,P07,P04,P09,P03,\"6-0, 6-1\"\n2025-10-31,P04,P01,P06,P07,\"6-1, 6-4\"\n2025-11-06,P05,P07,P01,P06,\"1-6, 1-6\"\n2025-11-10,P04,P07,P06,P01,\"6-7, 6-7\"\n2025-11-12,P02,P07,P01,P08,\"3-6, 2-6\"\n2025-11-18,P01,P08,P05,P07,\"6-4, 7-6\"\n2025-11-24,P01,P02,P06,P03,\"6-0, 7-6\"\n2025-11-25,P01,P06,P04,P05,\"6-7, 6-3, 6-2\"\n2025-12-01,P03,P02,P10,P01,\"7-6, 3-6, 3-6\"\n2025-12-02,P09,P04,P03,P06,\"2-6, 7-6, 6-3\"\n2025-12-08,P05,P07,P06,P01,\"0-6, 2-6\"\n2025-12-12,P07,P05,P04,P03,\"2-6, 2-6\"\n2025-12-18,P02,P03,P05,P04,\"6-1, 6-3\"\n2025-12-20,P01,P02,P06,P04,\"6-0, 7-6\"\n2025-12-25,P03,P01,P10,P09,\"6-0, 6-1\"\n2025-12-26,P06,P01,P07,P10,\"6-2, 6-4\"\n2025-12-29,P04,P03,P05,P02,\"3-6, 6-3, 3-6\"\n2025-12-30,P08,P06,P09,P07,\"6-1, 6-2\"\n2026-01-02,P04,P07,P08,P05,\"6-1, 6-0\"\n2026-01-03,P10,P02,P01,P06,\"2-6, 6-1, 4-6\"\n2026-01-05,P07,P01,P09,P02,\"4-6, 1-6\"\n2026-01-10,P08,P03,P02,P01,\"6-1, 3-6, 6-3\"\n2026-01-13,P03,P02,P10,P01,\"6-1, 7-6\"\n2026-01-15,P08,P03,P02,P05,\"6-3, 6-2\"\n2026-01-21,P05,P03,P10,P06,\"2-6, 6-2, 6-2\"\n2026-01-22,P08,P01,P09,P04,\"7-6, 6-2\"\n2026-01-25,P08,P09,P01,P04,\"2-6, 0-6\"\n2026-01-27,P04,P07,P01,P10,\"6-3, 6-1\"\n2026-01-31,P02,P04,P03,P06,\"6-1, 6-3\"\n2026-02-03,P02,P04,P08,P03,\"7-6, 6-2\"\n2026-02-04,P01,P09,P03,P10,\"6-3, 0-6, 0-6\"\n2026-02-09,P10,P01,P02,P09,\"6-4, 3-6, 3-6\"\n2026-02-10,P02,P01,P08,P03,\"6-1, 6-2\"\n2026-02-16,P01,P02,P03,P04,\"6-0, 6-4\"\n2026-02-18,P10,P01,P06,P02,\"6-4, 6-0\"\n2026-02-20,P08,P04,P01,P09,\"6-2, 6-2\"\n2026-02-21,P02,P07,P01,P10,\"6-0, 1-6, 6-2\"\n";
+
+  // ---------- Wiring ----------
+  function segment(id, key) {
+    $(id).addEventListener('click', function (e) {
+      var b = e.target.closest('button'); if (!b) return;
+      Array.prototype.forEach.call($(id).children, function (c) { c.classList.toggle('on', c === b); });
+      S[key] = b.getAttribute('data-v');
+      refreshChart();
+    });
+  }
+
+  function init() {
+    wireDrop('ratings'); wireDrop('matches');
+    $('loadUrlsBtn').addEventListener('click', function () { loadUrls($('ratingsUrl').value.trim(), $('matchesUrl').value.trim()); });
+    $('sampleBtn').addEventListener('click', function () {
+      S.ratingsText = SAMPLE_RATINGS; S.matchesText = SAMPLE_MATCHES;
+      $('ratingsInfo').textContent = 'Sample: 10 fictional players'; $('matchesInfo').textContent = 'Sample: 90 matches';
+      $('ratingsDrop').classList.add('loaded'); $('matchesDrop').classList.add('loaded');
+      tryBuild();
+    });
+    $('formatBtn').addEventListener('click', function () { $('formatHelp').classList.toggle('hidden'); });
+    segment('metricSeg', 'metric'); segment('xSeg', 'xMode'); segment('modeSeg', 'mode');
+    $('invertChk').addEventListener('change', function () { S.invert = this.checked; refreshChart(); });
+
+    var cv = $('chart');
+    cv.addEventListener('pointerdown', onPointerDown);
+    cv.addEventListener('pointermove', onPointerMove);
+    cv.addEventListener('pointerup', onPointerUp);
+    cv.addEventListener('pointercancel', onPointerUp);
+
+    $('resetStartsBtn').addEventListener('click', function () {
+      S.players.forEach(function (p) { S.starts[p.id] = { pti: p.pti, sigma: p.sigma, lastPlayed: p.lastPlayed }; });
+      if (S.result) { run(); renderAll(); }
+    });
+    $('clearBreaksBtn').addEventListener('click', function () { S.overrides = []; if (S.result) { run(); renderAll(); } });
+    $('downloadBtn').addEventListener('click', downloadResults);
+    $('downloadStartsBtn').addEventListener('click', downloadStarts);
+
+    $('playerSearch').addEventListener('input', function () { S.search = this.value; renderPlayers(); });
+    $('playersBody').addEventListener('change', function (e) {
+      var tr = e.target.closest('tr'); if (!tr) return;
+      if (e.target.classList.contains('show')) { toggle(tr.getAttribute('data-id'), e.target.checked); renderAll(); }
+    });
+    $('playersBody').addEventListener('input', function (e) {
+      var tr = e.target.closest('tr'), id = tr && tr.getAttribute('data-id'), v = parseFloat(e.target.value);
+      if (!id || isNaN(v)) return;
+      if (e.target.classList.contains('start-pti')) S.starts[id].pti = v;
+      else if (e.target.classList.contains('start-sigma')) { if (v <= 0) return; S.starts[id].sigma = v; }
+      else return;
+      run(); refreshChart(); updatePlayerNumbers(); renderMatches();
+    });
+    $('breaksList').addEventListener('click', function (e) {
+      if (!e.target.classList.contains('rm')) return;
+      var o = S.overrides[+e.target.closest('[data-i]').getAttribute('data-i')];
+      removeOverride(o.id, o.matchIndex);
+    });
+    $('breaksList').addEventListener('input', function (e) {
+      var o = S.overrides[+e.target.closest('[data-i]').getAttribute('data-i')], v = e.target.value.trim();
+      var field = e.target.classList.contains('b-pti') ? 'pti' : 'sigma';
+      if (v === '') delete o[field]; else if (!isNaN(parseFloat(v)) && !(field === 'sigma' && parseFloat(v) <= 0)) o[field] = parseFloat(v); else return;
+      run(); refreshChart(); updatePlayerNumbers(); renderMatches();
+    });
+
+    $('themeToggleBtn').addEventListener('click', function () {
+      var dark = !isDark();
+      document.documentElement.classList.toggle('dark', dark);
+      try { localStorage.setItem('theme', dark ? 'dark' : 'light'); } catch (e) {}
+      $('themeToggleLabel').textContent = dark ? 'Light Mode' : 'Dark Mode';
+      if (S.result) renderAll();
+    });
+    $('themeToggleLabel').textContent = isDark() ? 'Light Mode' : 'Dark Mode';
+
+    // ?ratings=URL&matches=URL loads on open
+    var q = new URLSearchParams(location.search);
+    if (q.get('ratings')) $('ratingsUrl').value = q.get('ratings');
+    if (q.get('matches')) $('matchesUrl').value = q.get('matches');
+    if (q.get('ratings') && q.get('matches')) loadUrls(q.get('ratings'), q.get('matches'));
+    refreshChart();
+  }
+
+  if (typeof pti24History !== 'function') {
+    setStatus('pti24-refactored.js and pti24-history.js must be in the same folder as this page.', true);
+  }
+  init();
+})();
+</script>
+</body>
+</html>
