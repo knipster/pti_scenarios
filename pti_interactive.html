@@ -491,18 +491,45 @@
   }
 
   // ---------- Chart data ----------
-  // x position of each match: its day, with same-day matches spread a little to keep their order
+  // x position of each match.
+  // By date: its day, with same-day matches spread a little to keep their order.
+  // By match #: the position of its day among the distinct dates the chart
+  // shows, so every series lines up by date with no calendar gaps.
   function matchX() {
-    if (S.xs && S.xs.mode === S.xMode) return S.xs.v;
+    if (S.xMode === 'index') return dateIndexX();
+    if (S.xs) return S.xs;
     var e = S.eng, v = new Float64Array(e.n), lastDay = null, n = 0;
     for (var k = 0; k < e.n; k++) {
-      if (S.xMode === 'index') { v[k] = k + 1; continue; }
       var d = e.day[k];
       if (d === lastDay) n++; else { n = 0; lastDay = d; }
       v[k] = d * DAY + n * DAY / 6;
     }
-    S.xs = { mode: S.xMode, v: v };
+    return (S.xs = v);
+  }
+  function dateIndexX() {
+    var e = S.eng, ks = [], seen = new Set();
+    function add(pos) { var k = pos >> 2; if (!seen.has(k)) { seen.add(k); ks.push(k); } }
+    S.selected.forEach(function (r) {
+      e.positions(r).forEach(add);
+      if (S.showOrig) (S.groups[r] || [r]).forEach(function (i) { e.origPositions(i).forEach(add); });
+    });
+    ks.sort(function (a, b) { return e.day[a] - e.day[b] || a - b; });
+    if (!S.xIdx || S.xIdx.length !== e.n) S.xIdx = new Float64Array(e.n);
+    var v = S.xIdx, days = [];
+    for (var j = 0; j < ks.length;) {
+      var d = e.day[ks[j]], end = j;
+      while (end < ks.length && e.day[ks[end]] === d) end++;
+      // Several shown matches on one day: spread them within that day's slot
+      for (var q = j; q < end; q++) v[ks[q]] = days.length + 0.6 * (q - j) / (end - j);
+      days.push(d);
+      j = end;
+    }
+    S.xDays = days;
     return v;
+  }
+  function xLabel(v) {
+    if (S.xMode !== 'index') return fmtDate(v);
+    return Number.isInteger(v) && S.xDays && S.xDays[v] != null ? fmtDate(S.xDays[v] * DAY) : '';
   }
   function findOverride(i, k) { return S.overrides.find(function (o) { return o.i === i && o.k === k; }); }
 
@@ -616,8 +643,8 @@
         scales: {
           x: {
             type: 'linear', grid: { color: tc.grid }, border: { display: false },
-            ticks: { color: tc.text, maxTicksLimit: 8, callback: function (v) { return S.xMode === 'index' ? (Number.isInteger(v) ? '#' + num(v) : '') : fmtDate(v); } },
-            title: { display: true, text: S.xMode === 'index' ? 'Match #' : 'Date', color: tc.text }
+            ticks: { color: tc.text, maxTicksLimit: 8, precision: 0, callback: xLabel },
+            title: { display: true, text: 'Date', color: tc.text }
           },
           y: {
             reverse: S.invert, grid: { color: tc.grid }, border: { display: false },
@@ -650,9 +677,10 @@
     var tc = themeColors(), o = chart.options;
     o.scales.y.reverse = S.invert;
     o.scales.y.title.text = S.metric === 'Pti' ? 'PTI' : 'Sigma';
-    o.scales.x.title.text = S.xMode === 'index' ? 'Match #' : 'Date';
     [o.scales.x, o.scales.y].forEach(function (a) { a.ticks.color = tc.text; a.grid.color = tc.grid; a.title.color = tc.text; });
     o.plugins.legend.labels.color = tc.text;
+    // By match #: end at the last shown date instead of a rounded-up blank stretch
+    if (S.xMode === 'index' && S.xDays && S.xDays.length) o.scales.x.max = S.xDays.length - 0.4; else delete o.scales.x.max;
     if (drag) { o.scales.y.min = drag.yMin; o.scales.y.max = drag.yMax; }
     else { delete o.scales.y.min; delete o.scales.y.max; }
     chart.update('none');
