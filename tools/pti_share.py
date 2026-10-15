@@ -146,7 +146,12 @@ def main():
     p.add_argument('--secret', default='pti-share-secret.json')
     p.add_argument('--out', default='share-out')
     p.add_argument('--force', action='store_true')
-    a = p.parse_args()
+    # Older Pythons (before 3.13) don't match the password if it comes after the options
+    a, extra = p.parse_known_args()
+    if extra and not a.password and len(extra) == 1 and not extra[0].startswith('-'):
+        a.password = extra[0]
+    elif extra:
+        p.error('unrecognized arguments: ' + ' '.join(extra))
     sh = Share(a)
 
     if a.cmd == 'init':
