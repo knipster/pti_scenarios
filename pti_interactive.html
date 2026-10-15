@@ -11,9 +11,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
-  <!-- Rating engine: keep these two files next to this page -->
-  <script src="pti24-refactored.js"></script>
-  <script src="pti24-history.js"></script>
+  <!-- Rating engine: keep this file next to this page -->
+  <script src="pti24-engine.js"></script>
 
   <script>
     tailwind.config = {
@@ -205,6 +204,7 @@
           <button id="clearBreaksBtn" type="button" class="btn">Remove all breaks</button>
           <button id="downloadBtn" type="button" class="btn">Download results CSV</button>
           <button id="downloadStartsBtn" type="button" class="btn">Download starting ratings CSV</button>
+          <span id="perf" class="text-xs muted self-center" role="status"></span>
         </div>
       </div>
     </section>
@@ -256,7 +256,7 @@
   </main>
 
   <footer class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8 text-xs muted">
-    Ratings computed in your browser with pti24-refactored.js and pti24-history.js. Nothing is uploaded.
+    Ratings computed in your browser with pti24-engine.js (same math as pti24-refactored.js). Nothing is uploaded.
   </footer>
 
 <script>
@@ -266,19 +266,18 @@
   // ---------- State ----------
   var S = {
     ratingsText: null, matchesText: null,
-    players: [],         // [{ id, name, pti, sigma, lastPlayed }] as loaded
-    starts: {},          // id -> { pti, sigma, lastPlayed } (editable)
-    matches: [],         // match rows as loaded
-    overrides: [],       // [{ id, matchIndex, pti?, sigma? }]
-    result: null,        // pti24History output
-    selected: [],        // ids shown on the chart, max 8
-    slot: {},            // id -> colour slot 0..7 (kept while shown)
+    players: [],         // [{ id, name, pti, sigma, lastPlayed }] as loaded; index = engine player index
+    eng: null,           // PtiEngine
+    xs: null,            // x position of each match for the current axis mode
+    overrides: [],       // breaks: [{ i, k, pos, pti?, sigma? }]
+    selected: [],        // player indexes shown on the chart, max 8
+    slot: {},            // player index -> colour slot 0..7 (kept while shown)
     metric: 'Pti', xMode: 'date', mode: 'move', invert: false,
     search: '',
     sort: { key: null, dir: 1 },  // players table sort; null keeps file order
-    sortOrder: null               // players in sorted order, set when a header is clicked
+    sortOrder: null               // player indexes in sorted order, set when a header is clicked
   };
-  var MAX_SHOWN = 8;
+  var MAX_SHOWN = 8, MAX_TABLE_ROWS = 200, MAX_MATCH_ROWS = 300;
   // Categorical palette (fixed order), light and dark steps
   var PALETTE = {
     light: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'],
@@ -289,99 +288,155 @@
   var $ = function (id) { return document.getElementById(id); };
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function isDark() { return document.documentElement.classList.contains('dark'); }
-  function colorOf(id) { return PALETTE[isDark() ? 'dark' : 'light'][S.slot[id]]; }
-  function nameOf(id) { var p = S.players.find(function (x) { return x.id === id; }); return p && p.name ? p.name : id; }
+  function colorOf(i) { return PALETTE[isDark() ? 'dark' : 'light'][S.slot[i]]; }
+  function nameOf(i) { return i >= 0 && S.players[i] ? S.players[i].name : '?'; }
+  function nameOfId(id) { var i = S.eng && S.eng.index.get(String(id)); return i === undefined ? String(id) : nameOf(i); }
   function fmt(v, d) { return v == null || isNaN(v) ? '–' : (+v).toFixed(d == null ? 2 : d); }
+  function num(n) { return n.toLocaleString('en-US'); }
+  function secs(ms) { return ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(1) + ' s'; }
   function setStatus(msg, bad) { var el = $('status'); el.textContent = msg; el.style.color = bad ? '#f43f5e' : ''; }
+  function setPerf(res) {
+    if (!res) { $('perf').textContent = ''; return; }
+    $('perf').textContent = 'Last change: ' + num(res.recalculated) + ' of ' + num(S.eng.n) + ' matches recalculated in ' + secs(res.ms);
+  }
+  function field() { return S.metric === 'Pti' ? 'pti' : 'sigma'; }
 
   // ---------- CSV ----------
+  // Reads the whole file into columns. Lines without quotes take a fast split;
+  // quoted lines (e.g. scores like "6-3, 4-6") are parsed field by field.
   function parseCsv(text) {
-    text = String(text).replace(/^﻿/, '');
-    var rows = [], row = [], field = '', q = false;
-    for (var i = 0; i < text.length; i++) {
-      var c = text[i];
-      if (q) {
-        if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; }
-        else field += c;
-      } else if (c === '"') q = true;
-      else if (c === ',') { row.push(field); field = ''; }
-      else if (c === '\n' || c === '\r') {
-        if (c === '\r' && text[i + 1] === '\n') i++;
-        row.push(field); field = '';
-        if (row.some(function (f) { return f.trim() !== ''; })) rows.push(row);
-        row = [];
-      } else field += c;
+    text = String(text);
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    var len = text.length, pos = 0, head = null, cols = null, rows = 0;
+    while (pos < len) {
+      var nl = text.indexOf('\n', pos); if (nl < 0) nl = len;
+      var end = nl > pos && text.charCodeAt(nl - 1) === 13 ? nl - 1 : nl;
+      var q = text.indexOf('"', pos), fields, next = nl + 1;
+      if (q < 0 || q >= end) fields = text.slice(pos, end).split(',');
+      else if (q > pos && text.charCodeAt(q - 1) === 44 && text.charCodeAt(end - 1) === 34 && text.indexOf('"', q + 1) === end - 1) {
+        // Common case: only the last field is quoted, e.g. ...,"6-3, 4-6"
+        fields = text.slice(pos, q - 1).split(','); fields.push(text.slice(q + 1, end - 1));
+      } else { var r = parseQuoted(text, pos); fields = r.fields; next = r.next; }
+      pos = next;
+      if (fields.length === 1 && fields[0].trim() === '') continue;
+      if (!head) {
+        head = fields.map(function (h) { return h.trim().toLowerCase().replace(/[^a-z0-9]/g, ''); });
+        cols = head.map(function () { return []; });
+        continue;
+      }
+      for (var c = 0; c < head.length; c++) {
+        var v = c < fields.length ? fields[c] : '';
+        // trim only when needed (most fields have no spaces around them)
+        if (v.length && (v.charCodeAt(0) <= 32 || v.charCodeAt(v.length - 1) <= 32)) v = v.trim();
+        cols[c].push(v);
+      }
+      rows++;
     }
-    row.push(field);
-    if (row.some(function (f) { return f.trim() !== ''; })) rows.push(row);
-    if (!rows.length) return [];
-    var head = rows[0].map(function (h) { return h.trim().toLowerCase().replace(/[^a-z0-9]/g, ''); });
-    return rows.slice(1).map(function (r) {
-      var o = {}; head.forEach(function (h, i) { o[h] = (r[i] || '').trim(); }); return o;
-    });
+    var out = { rows: rows, col: {} };
+    if (head) head.forEach(function (h, c) { if (!(h in out.col)) out.col[h] = cols[c]; });
+    return out;
   }
-  function pick(o, names) { for (var i = 0; i < names.length; i++) if (o[names[i]] !== undefined && o[names[i]] !== '') return o[names[i]]; return ''; }
+  function parseQuoted(text, pos) {
+    var fields = [], f = '', len = text.length, i = pos;
+    while (i < len) {
+      var c = text.charCodeAt(i);
+      if (c === 34) {                       // quoted field
+        var j = i + 1;
+        for (;;) {
+          var qq = text.indexOf('"', j);
+          if (qq < 0) { f += text.slice(j); i = len; break; }
+          f += text.slice(j, qq);
+          if (text.charCodeAt(qq + 1) === 34) { f += '"'; j = qq + 2; } else { i = qq + 1; break; }
+        }
+      } else if (c === 44) { fields.push(f); f = ''; i++; }
+      else if (c === 10 || c === 13) { break; }
+      else {
+        var k = i; while (k < len) { var d = text.charCodeAt(k); if (d === 44 || d === 10 || d === 13 || d === 34) break; k++; }
+        f += text.slice(i, k); i = k;
+      }
+    }
+    fields.push(f);
+    if (text.charCodeAt(i) === 13) i++;
+    if (text.charCodeAt(i) === 10) i++;
+    return { fields: fields, next: i };
+  }
+  function pickCol(p, names) { for (var i = 0; i < names.length; i++) if (p.col[names[i]]) return p.col[names[i]]; return null; }
 
   function readRatings(text) {
-    var out = [], bad = 0;
-    parseCsv(text).forEach(function (o) {
-      var id = pick(o, ['id', 'playerid', 'player']);
-      var pti = parseFloat(pick(o, ['pti', 'rating', 'startpti', 'startrating']));
-      var sigma = parseFloat(pick(o, ['sigma', 'startsigma', 'volatility']));
-      if (!id || isNaN(pti) || isNaN(sigma)) { bad++; return; }
-      out.push({ id: id, name: pick(o, ['name', 'playername']) || id, pti: pti, sigma: sigma,
-                 lastPlayed: pick(o, ['lastplayed', 'lastdate', 'lastmatch']) || null });
-    });
-    if (!out.length) throw new Error('No usable rows in the ratings CSV (need id, pti, sigma columns).');
+    var p = parseCsv(text);
+    var id = pickCol(p, ['id', 'playerid', 'player']), pti = pickCol(p, ['pti', 'rating', 'startpti', 'startrating']);
+    var sigma = pickCol(p, ['sigma', 'startsigma', 'volatility']), name = pickCol(p, ['name', 'playername']);
+    var last = pickCol(p, ['lastplayed', 'lastdate', 'lastmatch']);
+    if (!id || !pti || !sigma) throw new Error('The ratings CSV needs id, pti and sigma columns.');
+    var out = [], seen = new Set(), bad = 0;
+    for (var r = 0; r < p.rows; r++) {
+      var pid = id[r], a = parseFloat(pti[r]), b = parseFloat(sigma[r]);
+      if (!pid || isNaN(a) || isNaN(b) || seen.has(pid)) { bad++; continue; }
+      seen.add(pid);
+      out.push({ id: pid, name: (name && name[r]) || pid, pti: a, sigma: b, lastPlayed: (last && last[r]) || null });
+    }
+    if (!out.length) throw new Error('No usable rows in the ratings CSV.');
     return { rows: out, bad: bad };
   }
   function readMatches(text) {
-    var out = [];
-    parseCsv(text).forEach(function (o) {
-      out.push({
-        date: pick(o, ['date', 'matchdate']),
-        player1id: pick(o, ['player1id', 'player1', 'p1', 'p1id']),
-        player2id: pick(o, ['player2id', 'player2', 'p2', 'p2id']),
-        player3id: pick(o, ['player3id', 'player3', 'p3', 'p3id']),
-        player4id: pick(o, ['player4id', 'player4', 'p4', 'p4id']),
-        score: pick(o, ['score', 'scores', 'setscores'])
-      });
-    });
-    if (!out.length) throw new Error('No rows in the matches CSV.');
-    if (!out[0].player1id || !out[0].score) throw new Error('Matches CSV needs date, player1id … player4id and score columns.');
-    return out;
+    var p = parseCsv(text), cols = {
+      date: pickCol(p, ['date', 'matchdate']),
+      player1id: pickCol(p, ['player1id', 'player1', 'p1', 'p1id']),
+      player2id: pickCol(p, ['player2id', 'player2', 'p2', 'p2id']),
+      player3id: pickCol(p, ['player3id', 'player3', 'p3', 'p3id']),
+      player4id: pickCol(p, ['player4id', 'player4', 'p4', 'p4id']),
+      score: pickCol(p, ['score', 'scores', 'setscores'])
+    };
+    if (!p.rows) throw new Error('No rows in the matches CSV.');
+    for (var k in cols) if (!cols[k]) throw new Error('The matches CSV needs date, player1id … player4id and score columns.');
+    return cols;
   }
 
   // ---------- Loading ----------
   function tryBuild() {
     if (S.ratingsText == null || S.matchesText == null) return;
-    try {
-      var r = readRatings(S.ratingsText), m = readMatches(S.matchesText);
-      S.players = r.rows;
-      S.starts = {};
-      r.rows.forEach(function (p) { S.starts[p.id] = { pti: p.pti, sigma: p.sigma, lastPlayed: p.lastPlayed }; });
-      S.matches = m; S.overrides = []; S.selected = []; S.slot = {}; S.sortOrder = null;
-      run();
-      // Show the most active players first
-      var counts = {};
-      Object.keys(S.result.ratings).forEach(function (id) { counts[id] = S.result.ratings[id].matches; });
-      S.players.slice().sort(function (a, b) { return counts[b.id] - counts[a.id]; })
-        .slice(0, Math.min(5, S.players.length)).forEach(function (p) { toggle(p.id, true); });
-      var errs = S.result.matches.filter(function (x) { return x.error; }).length;
-      setStatus(S.players.length + ' players, ' + S.matches.length + ' matches loaded' +
-        (r.bad ? ', ' + r.bad + ' rating rows skipped' : '') + (errs ? ', ' + errs + ' matches not rated (see table)' : '') + '.', false);
-      renderAll();
-    } catch (e) { setStatus(e.message, true); }
-  }
-  function setText(kind, text, label) {
-    if (kind === 'ratings') S.ratingsText = text; else S.matchesText = text;
-    $(kind + 'Info').textContent = label;
-    $(kind + 'Drop').classList.add('loaded');
-    tryBuild();
+    setStatus('Reading files and rating every match…');
+    // Let the status paint before the heavy work
+    setTimeout(function () {
+      try {
+        var t0 = performance.now();
+        var r = readRatings(S.ratingsText), m = readMatches(S.matchesText);
+        var t1 = performance.now();
+        S.players = r.rows;
+        S.eng = new PtiEngine(r.rows, m);
+        var t2 = performance.now();
+        var run = S.eng.runAll();
+        S.overrides = []; S.selected = []; S.slot = {}; S.sortOrder = null; S.xs = null;
+        S.ratingsText = S.matchesText = null;  // free the raw text
+        // Show the most active players first
+        var top = [];
+        for (var i = 0; i < S.eng.np; i++) {
+          top.push(i); top.sort(function (a, b) { return S.eng.count[b] - S.eng.count[a]; });
+          if (top.length > 5) top.pop();
+        }
+        top.forEach(function (i) { if (S.eng.count[i]) toggle(i, true); });
+        var unrated = 0; for (var k = 0; k < S.eng.n; k++) if (!S.eng.rated(k)) unrated++;
+        setStatus(num(S.players.length) + ' players and ' + num(S.eng.n) + ' matches loaded in ' + secs(performance.now() - t0) +
+          ' (reading ' + secs(t1 - t0) + ', indexing ' + secs(t2 - t1) + ', rating ' + secs(run.ms) + ')' +
+          (r.bad ? '. ' + num(r.bad) + ' rating rows skipped' : '') + (unrated ? '. ' + num(unrated) + ' matches could not be rated' : '') + '.', false);
+        setPerf(null);
+        renderAll();
+      } catch (e) { setStatus(e.message, true); }
+    }, 30);
   }
   function wireDrop(kind) {
     var zone = $(kind + 'Drop'), input = $(kind + 'File');
-    function take(file) { if (file) file.text().then(function (t) { setText(kind, t, file.name); }); }
+    function take(file) {
+      if (!file) return;
+      setStatus('Reading ' + file.name + '…');
+      file.text().then(function (t) {
+        if (kind === 'ratings') S.ratingsText = t; else S.matchesText = t;
+        $(kind + 'Info').textContent = file.name + ' (' + (file.size / 1e6).toFixed(1) + ' MB)';
+        zone.classList.add('loaded');
+        if (S.ratingsText == null || S.matchesText == null) setStatus('Loaded ' + file.name + '; add the other file.');
+        tryBuild();
+      });
+    }
     input.addEventListener('change', function () { take(input.files[0]); });
     zone.addEventListener('dragover', function (e) { e.preventDefault(); zone.classList.add('over'); });
     zone.addEventListener('dragleave', function () { zone.classList.remove('over'); });
@@ -392,7 +447,7 @@
   }
   function loadUrls(rUrl, mUrl) {
     if (!rUrl && !mUrl) { setStatus('Enter at least one URL.', true); return; }
-    setStatus('Loading…');
+    setStatus('Downloading…');
     Promise.all([rUrl ? fetchText(rUrl) : null, mUrl ? fetchText(mUrl) : null]).then(function (t) {
       if (t[0] != null) { S.ratingsText = t[0]; $('ratingsInfo').textContent = rUrl; $('ratingsDrop').classList.add('loaded'); }
       if (t[1] != null) { S.matchesText = t[1]; $('matchesInfo').textContent = mUrl; $('matchesDrop').classList.add('loaded'); }
@@ -401,49 +456,36 @@
     }).catch(function (e) { setStatus('Could not load: ' + e.message + ' (a URL on another site must allow cross-origin requests).', true); });
   }
 
-  // ---------- Engine ----------
-  function run() {
-    S.result = pti24History(S.starts, S.matches, { overrides: S.overrides });
-  }
-
+  // ---------- Chart data ----------
   // x position of each match: its day, with same-day matches spread a little to keep their order
   function matchX() {
-    var xs = [], lastDay = null, n = 0;
-    S.matches.forEach(function (m, k) {
-      if (S.xMode === 'index') { xs.push(k + 1); return; }
-      var d = dayMs(m.date);
+    if (S.xs && S.xs.mode === S.xMode) return S.xs.v;
+    var e = S.eng, v = new Float64Array(e.n), lastDay = null, n = 0;
+    for (var k = 0; k < e.n; k++) {
+      if (S.xMode === 'index') { v[k] = k + 1; continue; }
+      var d = e.day[k];
       if (d === lastDay) n++; else { n = 0; lastDay = d; }
-      xs.push(d == null ? null : d + n * DAY / 6);
-    });
-    return xs;
+      v[k] = d * DAY + n * DAY / 6;
+    }
+    S.xs = { mode: S.xMode, v: v };
+    return v;
   }
-  function dayMs(s) {
-    var m;
-    s = String(s || '').trim();
-    if ((m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s))) return Date.UTC(+m[1], m[2] - 1, +m[3]);
-    if ((m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s))) return Date.UTC(+m[3], m[1] - 1, +m[2]);
-    var t = Date.parse(s); return isNaN(t) ? null : t;
-  }
-  function findOverride(id, k) { return S.overrides.find(function (o) { return o.id === id && o.matchIndex === k; }); }
+  function findOverride(i, k) { return S.overrides.find(function (o) { return o.i === i && o.k === k; }); }
 
-  function seriesFor(id, xs, gap) {
-    var pts = [], rows = S.result.matches, key = S.metric, first = true, prevX = null;
-    rows.forEach(function (row, k) {
-      if (row.error && !('player1EndPti' in row)) return;
-      var n = [row.player1id, row.player2id, row.player3id, row.player4id].indexOf(id) + 1;
-      if (!n || xs[k] == null) return;
-      var x = xs[k];
-      if (first) {
-        pts.push({ x: x - gap, y: S.starts[id][key === 'Pti' ? 'pti' : 'sigma'], kind: 'start', id: id });
-        first = false; prevX = x - gap;
+  function seriesFor(i, xs, gap) {
+    var e = S.eng, pts = [], key = field(), prevX = null;
+    var ends = key === 'pti' ? e.endPti : e.endSigma, ov = key === 'pti' ? e.ovPti : e.ovSigma;
+    var list = e.positions(i);
+    for (var j = 0; j < list.length; j++) {
+      var pos = list[j], k = pos >> 2, x = xs[k];
+      if (j === 0) {
+        pts.push({ x: x - gap, y: key === 'pti' ? e.initPti[i] : e.initSigma[i], kind: 'start', i: i });
+        prevX = x - gap;
       }
-      var o = findOverride(id, k), field = key === 'Pti' ? 'pti' : 'sigma';
-      if (o && o[field] != null) {
-        pts.push({ x: x - Math.min(gap / 2, (x - prevX) / 2), y: o[field], kind: 'break', id: id, k: k });
-      }
-      pts.push({ x: x, y: row['player' + n + 'End' + key], kind: 'match', id: id, k: k, n: n });
+      if (e.hasOv[pos] && ov.has(pos)) pts.push({ x: x - Math.min(gap / 2, (x - prevX) / 2), y: ov.get(pos), kind: 'break', i: i, k: k, pos: pos });
+      pts.push({ x: x, y: ends[pos], kind: 'match', i: i, k: k, pos: pos });
       prevX = x;
-    });
+    }
     return pts;
   }
 
@@ -455,20 +497,25 @@
       ? { text: '#c3c2b7', grid: 'rgba(255,255,255,0.07)', surface: '#111827' }
       : { text: '#475569', grid: 'rgba(15,23,42,0.07)', surface: '#ffffff' };
   }
-  function fmtDate(ms) { var d = new Date(ms); return d.toISOString().slice(0, 10); }
+  function fmtDate(ms) { return new Date(ms).toISOString().slice(0, 10); }
 
   function buildDatasets() {
-    var xs = matchX(), valid = xs.filter(function (v) { return v != null; });
-    var span = valid.length ? Math.max(valid[valid.length - 1] - valid[0], 1) : 1;
-    var gap = S.xMode === 'index' ? 0.6 : Math.max(DAY * 3, span * 0.015);
+    var xs = matchX(), first = Infinity, last = -Infinity;
+    S.selected.forEach(function (i) {
+      var e = S.eng;
+      if (e.firstPos[i] >= 0) { first = Math.min(first, xs[e.firstPos[i] >> 2]); last = Math.max(last, xs[e.lastPos[i] >> 2]); }
+    });
+    var span = isFinite(first) ? Math.max(last - first, 1) : 1;
+    var gap = S.xMode === 'index' ? Math.max(0.6, span * 0.01) : Math.max(DAY * 3, span * 0.015);
     var surface = themeColors().surface;
-    return S.selected.map(function (id) {
-      var c = colorOf(id);
+    return S.selected.map(function (i) {
+      var c = colorOf(i), data = seriesFor(i, xs, gap), dense = data.length > 120;
       return {
-        label: nameOf(id), data: seriesFor(id, xs, gap), _id: id,
+        label: nameOf(i), data: data,
         borderColor: c, backgroundColor: c, borderWidth: 2, tension: 0,
         pointBorderColor: surface, pointBorderWidth: 2,
-        pointRadius: function (ctx) { var r = ctx.raw; return !r ? 3 : r.kind === 'start' ? 6 : r.kind === 'break' ? 7 : 3; },
+        // Long histories hide the per-match dots (hover still finds them)
+        pointRadius: function (ctx) { var r = ctx.raw; return !r ? 3 : r.kind === 'start' ? 6 : r.kind === 'break' ? 7 : dense ? 0 : 3; },
         pointHoverRadius: function (ctx) { var r = ctx.raw; return !r ? 5 : r.kind === 'match' ? 5 : 9; },
         pointHitRadius: 8,
         pointStyle: function (ctx) { return ctx.raw && ctx.raw.kind === 'break' ? 'rectRot' : 'circle'; },
@@ -481,15 +528,15 @@
 
   function tooltipLines(raw) {
     if (raw.kind === 'start') return ['Starting ' + (S.metric === 'Pti' ? 'PTI' : 'sigma') + ': ' + fmt(raw.y), 'Drag to change'];
-    if (raw.kind === 'break') return ['Break before match #' + (raw.k + 1) + ': ' + fmt(raw.y), 'Drag to move, double-click to remove'];
-    var row = S.result.matches[raw.k], n = raw.n, p = 'player' + n;
-    var mine = n <= 2 ? [1, 2] : [3, 4], them = n <= 2 ? [3, 4] : [1, 2];
-    var partner = mine.find(function (i) { return i !== n; });
+    if (raw.kind === 'break') return ['Break before match #' + num(raw.k + 1) + ': ' + fmt(raw.y), 'Drag to move, double-click to remove'];
+    var e = S.eng, pos = raw.pos, k = raw.k, s = pos & 3, b = 4 * k;
+    var partner = b + (s ^ 1), them = s < 2 ? [b + 2, b + 3] : [b, b + 1];
+    var sp = e.startPti(pos), d = e.endPti[pos] - sp;
     return [
-      'Match #' + (raw.k + 1) + ' • ' + row.score,
-      'With ' + nameOf(row['player' + partner + 'id']) + ' vs ' + nameOf(row['player' + them[0] + 'id']) + ' & ' + nameOf(row['player' + them[1] + 'id']),
-      'PTI ' + fmt(row[p + 'StartPti']) + ' → ' + fmt(row[p + 'EndPti']) + ' (' + (row[p + 'Delta'] >= 0 ? '+' : '') + fmt(row[p + 'Delta']) + ')',
-      'Sigma ' + fmt(row[p + 'StartSigma']) + ' → ' + fmt(row[p + 'EndSigma']) + ' • ' + row[p + 'BreakDays'] + ' days since last match'
+      'Match #' + num(k + 1) + ' • ' + e.scores[k],
+      'With ' + nameOf(e.pl[partner]) + ' vs ' + nameOf(e.pl[them[0]]) + ' & ' + nameOf(e.pl[them[1]]),
+      'PTI ' + fmt(sp) + ' → ' + fmt(e.endPti[pos]) + ' (' + (d >= 0 ? '+' : '') + fmt(d) + ')',
+      'Sigma ' + fmt(e.startSigma(pos)) + ' → ' + fmt(e.endSigma[pos]) + ' • ' + e.breakDays(pos) + ' days since last match'
     ];
   }
 
@@ -504,7 +551,7 @@
         scales: {
           x: {
             type: 'linear', grid: { color: tc.grid }, border: { display: false },
-            ticks: { color: tc.text, maxTicksLimit: 8, callback: function (v) { return S.xMode === 'index' ? (Number.isInteger(v) ? '#' + v : '') : fmtDate(v); } },
+            ticks: { color: tc.text, maxTicksLimit: 8, callback: function (v) { return S.xMode === 'index' ? (Number.isInteger(v) ? '#' + num(v) : '') : fmtDate(v); } },
             title: { display: true, text: S.xMode === 'index' ? 'Match #' : 'Date', color: tc.text }
           },
           y: {
@@ -520,9 +567,7 @@
             callbacks: {
               title: function (items) {
                 var r = items[0].raw; if (!r) return '';
-                var head = nameOf(r.id);
-                if (r.kind === 'match') head += ' • ' + S.result.matches[r.k].date;
-                return head;
+                return nameOf(r.i) + (r.kind === 'match' ? ' • ' + S.eng.dates[r.k] : '');
               },
               label: function (item) { return item.raw ? tooltipLines(item.raw) : ''; }
             }
@@ -533,14 +578,11 @@
   }
 
   function refreshChart() {
-    $('emptyMsg').style.display = S.result && S.selected.length ? 'none' : 'flex';
-    if (!S.result) return;
+    $('emptyMsg').style.display = S.eng && S.selected.length ? 'none' : 'flex';
+    if (!S.eng) return;
     if (!chart) makeChart();
-    var ds = buildDatasets();
-    // Update datasets in place so a drag in progress keeps its target
-    chart.data.datasets = ds;
-    var tc = themeColors();
-    var o = chart.options;
+    chart.data.datasets = buildDatasets();
+    var tc = themeColors(), o = chart.options;
     o.scales.y.reverse = S.invert;
     o.scales.y.title.text = S.metric === 'Pti' ? 'PTI' : 'Sigma';
     o.scales.x.title.text = S.xMode === 'index' ? 'Match #' : 'Date';
@@ -555,7 +597,7 @@
     if (!chart) return null;
     var els = chart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, false);
     if (!els.length) return null;
-    var e = els[0], raw = chart.data.datasets[e.datasetIndex].data[e.index];
+    var raw = chart.data.datasets[els[0].datasetIndex].data[els[0].index];
     return raw ? { raw: raw } : null;
   }
 
@@ -564,13 +606,13 @@
     if (!h) return;
     var raw = h.raw, now = Date.now();
     // Double-click / double-tap on a break removes it
-    if (raw.kind === 'break' && lastClick.raw && lastClick.raw.kind === 'break' && lastClick.raw.id === raw.id && lastClick.raw.k === raw.k && now - lastClick.t < 350) {
-      removeOverride(raw.id, raw.k); lastClick = { t: 0 }; return;
+    if (raw.kind === 'break' && lastClick.raw && lastClick.raw.kind === 'break' && lastClick.raw.pos === raw.pos && now - lastClick.t < 350) {
+      removeOverride(raw.i, raw.k); lastClick = { t: 0 }; return;
     }
     lastClick = { t: now, raw: raw };
-    if (raw.kind === 'match' && (S.mode === 'add' || evt.shiftKey)) { addOverride(raw.id, raw.k); return; }
+    if (raw.kind === 'match' && (S.mode === 'add' || evt.shiftKey)) { addOverride(raw.i, raw.k); return; }
     if (raw.kind === 'start' || raw.kind === 'break') {
-      drag = { raw: raw, yMin: chart.scales.y.min, yMax: chart.scales.y.max };
+      drag = { raw: raw, yMin: chart.scales.y.min, yMax: chart.scales.y.max, value: null };
       $('chartWrap').classList.add('grabbing');
       $('chart').setPointerCapture(evt.pointerId);
       evt.preventDefault();
@@ -586,71 +628,86 @@
     var rect = $('chart').getBoundingClientRect();
     var v = chart.scales.y.getValueForPixel(evt.clientY - rect.top);
     var lo = S.metric === 'Pti' ? -10 : 0.01, hi = S.metric === 'Pti' ? 120 : 10;
-    v = Math.round(Math.min(hi, Math.max(lo, v)) * 100) / 100;
-    var field = S.metric === 'Pti' ? 'pti' : 'sigma';
-    if (drag.raw.kind === 'start') S.starts[drag.raw.id][field] = v;
-    else { var o = findOverride(drag.raw.id, drag.raw.k); if (o) o[field] = v; }
-    if (!frame) frame = requestAnimationFrame(function () { frame = null; run(); refreshChart(); renderPlayers(); renderBreaks(); });
+    drag.value = Math.round(Math.min(hi, Math.max(lo, v)) * 100) / 100;
+    // Only the latest position matters; recalculate at most once per frame
+    if (!frame) frame = requestAnimationFrame(applyDrag);
+  }
+  function applyDrag() {
+    frame = null;
+    if (!drag || drag.value === null) return;
+    var raw = drag.raw, f = field(), res;
+    if (raw.kind === 'start') {
+      res = f === 'pti' ? S.eng.setStart(raw.i, drag.value, S.eng.initSigma[raw.i]) : S.eng.setStart(raw.i, S.eng.initPti[raw.i], drag.value);
+    } else {
+      var o = findOverride(raw.i, raw.k);
+      if (!o) return;
+      o[f] = drag.value;
+      res = S.eng.setOverride(o.pos, o.pti, o.sigma);
+    }
+    drag.value = null;
+    setPerf(res);
+    refreshChart(); updatePlayerNumbers(); updateBreakInputs();
   }
   function onPointerUp() {
     if (!drag) return;
+    if (frame) { cancelAnimationFrame(frame); applyDrag(); }
     drag = null;
     $('chartWrap').classList.remove('grabbing');
-    run(); renderAll();
+    renderAll();
   }
 
-  function addOverride(id, k) {
-    var field = S.metric === 'Pti' ? 'pti' : 'sigma', o = findOverride(id, k);
-    if (o && o[field] != null) return;
-    var row = S.result.matches[k], n = [row.player1id, row.player2id, row.player3id, row.player4id].indexOf(id) + 1;
-    if (!o) { o = { id: id, matchIndex: k }; S.overrides.push(o); }
-    o[field] = +(+row['player' + n + 'Start' + S.metric]).toFixed(2);
-    S.overrides.sort(function (a, b) { return a.matchIndex - b.matchIndex; });
-    run(); renderAll();
+  function addOverride(i, k) {
+    var e = S.eng, f = field(), o = findOverride(i, k), pos = e.posOf(i, k);
+    if (pos < 0 || (o && o[f] != null)) return;
+    if (!o) { o = { i: i, k: k, pos: pos }; S.overrides.push(o); }
+    o[f] = +(f === 'pti' ? e.startPti(pos) : e.startSigma(pos)).toFixed(2);
+    S.overrides.sort(function (a, b) { return a.k - b.k; });
+    setPerf(e.setOverride(pos, o.pti, o.sigma));
+    renderAll();
   }
-  function removeOverride(id, k) {
-    S.overrides = S.overrides.filter(function (o) { return !(o.id === id && o.matchIndex === k); });
-    run(); renderAll();
+  function removeOverride(i, k) {
+    var o = findOverride(i, k); if (!o) return;
+    S.overrides = S.overrides.filter(function (x) { return x !== o; });
+    setPerf(S.eng.clearOverride(o.pos));
+    renderAll();
   }
 
   // ---------- Players / breaks / matches tables ----------
-  function toggle(id, on) {
-    var i = S.selected.indexOf(id);
-    if (on && i < 0) {
+  function toggle(i, on) {
+    var at = S.selected.indexOf(i);
+    if (on && at < 0) {
       if (S.selected.length >= MAX_SHOWN) return;
       var used = S.selected.map(function (x) { return S.slot[x]; });
-      for (var s = 0; s < MAX_SHOWN; s++) if (used.indexOf(s) < 0) { S.slot[id] = s; break; }
-      S.selected.push(id);
-    } else if (!on && i >= 0) {
-      S.selected.splice(i, 1); delete S.slot[id];
+      for (var s = 0; s < MAX_SHOWN; s++) if (used.indexOf(s) < 0) { S.slot[i] = s; break; }
+      S.selected.push(i);
+    } else if (!on && at >= 0) {
+      S.selected.splice(at, 1); delete S.slot[i];
     }
   }
 
-  // Value of a players-table column for sorting
-  function sortValue(p, key) {
-    var r = S.result.ratings[p.id], st = S.starts[p.id];
-    switch (key) {
-      case 'show': return S.selected.indexOf(p.id) >= 0 ? 0 : 1;  // shown first
-      case 'name': return p.name.toLowerCase();
-      case 'matches': return r.matches;
-      case 'startPti': return st.pti;
-      case 'startSigma': return st.sigma;
-      case 'nowPti': return r.pti;
-      case 'change': return r.pti - st.pti;
-      case 'nowSigma': return r.sigma;
-    }
-  }
-  // The order is fixed when a header is clicked, so rows don't jump while
-  // you tick boxes or drag; click the header again to re-sort.
+  // Players table order: fixed when a header is clicked, so rows don't jump
+  // while you tick boxes or drag; click the header again to re-sort.
   function sortedPlayers() {
-    var key = S.sort.key, dir = S.sort.dir;
-    if (!key) return S.players;
+    var e = S.eng, key = S.sort.key, dir = S.sort.dir, n = S.players.length;
     if (S.sortOrder) return S.sortOrder;
-    return (S.sortOrder = S.players.slice().sort(function (a, b) {
-      var x = sortValue(a, key), y = sortValue(b, key);
-      if (x === y) return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;  // ties by name
-      return (x < y ? -1 : 1) * dir;
-    }));
+    var order = new Array(n); for (var i = 0; i < n; i++) order[i] = i;
+    if (!key) return order;
+    var val = new Float64Array(n), names = key === 'name' ? S.players.map(function (p) { return p.name.toLowerCase(); }) : null;
+    for (i = 0; i < n; i++) {
+      switch (key) {
+        case 'show': val[i] = S.selected.indexOf(i) >= 0 ? 0 : 1; break;
+        case 'matches': val[i] = e.count[i]; break;
+        case 'startPti': val[i] = e.initPti[i]; break;
+        case 'startSigma': val[i] = e.initSigma[i]; break;
+        case 'nowPti': val[i] = e.currentPti(i); break;
+        case 'change': val[i] = e.currentPti(i) - e.initPti[i]; break;
+        case 'nowSigma': val[i] = e.currentSigma(i); break;
+      }
+    }
+    order.sort(names
+      ? function (a, b) { return (names[a] < names[b] ? -1 : names[a] > names[b] ? 1 : 0) * dir; }
+      : function (a, b) { return (val[a] - val[b]) * dir || (a - b); });
+    return (S.sortOrder = order);
   }
   function renderSortHeaders() {
     Array.prototype.forEach.call(document.querySelectorAll('th.sortable'), function (th) {
@@ -663,39 +720,42 @@
   function renderPlayers() {
     renderSortHeaders();
     var body = $('playersBody');
-    if (!S.result) { body.innerHTML = ''; return; }
-    var q = S.search.toLowerCase(), full = S.selected.length >= MAX_SHOWN;
-    // Keep inputs that are being typed in
+    if (!S.eng) { body.innerHTML = ''; return; }
     var active = document.activeElement && body.contains(document.activeElement) ? document.activeElement : null;
     if (active && active.tagName === 'INPUT' && active.type === 'number') { updatePlayerNumbers(); return; }
-    body.innerHTML = sortedPlayers().filter(function (p) {
-      return !q || p.id.toLowerCase().indexOf(q) >= 0 || p.name.toLowerCase().indexOf(q) >= 0;
-    }).map(function (p) {
-      var shown = S.selected.indexOf(p.id) >= 0, r = S.result.ratings[p.id], st = S.starts[p.id];
-      var ch = r.pti - st.pti;
-      return '<tr data-id="' + esc(p.id) + '">' +
+    var e = S.eng, q = S.search.toLowerCase(), full = S.selected.length >= MAX_SHOWN;
+    var order = sortedPlayers(), rows = [], matched = 0;
+    for (var j = 0; j < order.length; j++) {
+      var p = S.players[order[j]];
+      if (q && p.id.toLowerCase().indexOf(q) < 0 && p.name.toLowerCase().indexOf(q) < 0) continue;
+      matched++;
+      if (rows.length < MAX_TABLE_ROWS) rows.push(order[j]);
+    }
+    body.innerHTML = rows.map(function (i) {
+      var p = S.players[i], shown = S.selected.indexOf(i) >= 0, ch = e.currentPti(i) - e.initPti[i];
+      return '<tr data-i="' + i + '">' +
         '<td><input type="checkbox" class="show accent-indigo-600"' + (shown ? ' checked' : '') + (!shown && full ? ' disabled title="Up to 8 players at a time"' : '') + '></td>' +
-        '<td>' + (shown ? '<span class="chip" style="background:' + colorOf(p.id) + '"></span> ' : '') + esc(p.name) + (p.name !== p.id ? ' <span class="muted">' + esc(p.id) + '</span>' : '') + '</td>' +
-        '<td class="num">' + r.matches + '</td>' +
-        '<td class="num"><input type="number" step="0.01" class="field field-sm start-pti" value="' + fmt(st.pti) + '"></td>' +
-        '<td class="num"><input type="number" step="0.01" min="0.01" class="field field-sm start-sigma" value="' + fmt(st.sigma) + '"></td>' +
-        '<td class="num now-pti">' + fmt(r.pti) + '</td>' +
+        '<td>' + (shown ? '<span class="chip" style="background:' + colorOf(i) + '"></span> ' : '') + esc(p.name) + (p.name !== p.id ? ' <span class="muted">' + esc(p.id) + '</span>' : '') + '</td>' +
+        '<td class="num">' + num(e.count[i]) + '</td>' +
+        '<td class="num"><input type="number" step="0.01" class="field field-sm start-pti" value="' + fmt(e.initPti[i]) + '"></td>' +
+        '<td class="num"><input type="number" step="0.01" min="0.01" class="field field-sm start-sigma" value="' + fmt(e.initSigma[i]) + '"></td>' +
+        '<td class="num now-pti">' + fmt(e.currentPti(i)) + '</td>' +
         '<td class="num now-ch ' + (ch > 0.005 ? 'up' : ch < -0.005 ? 'down' : '') + '">' + (ch >= 0 ? '+' : '') + fmt(ch) + '</td>' +
-        '<td class="num now-sigma">' + fmt(r.sigma) + '</td></tr>';
-    }).join('');
+        '<td class="num now-sigma">' + fmt(e.currentSigma(i)) + '</td></tr>';
+    }).join('') + (matched > rows.length
+      ? '<tr><td colspan="8" class="muted text-center">Showing ' + num(rows.length) + ' of ' + num(matched) + ' players. Search or sort to find others.</td></tr>' : '');
     $('selCount').textContent = '(' + S.selected.length + ' of ' + MAX_SHOWN + ' shown)';
     $('clearShownBtn').disabled = !S.selected.length;
   }
   function updatePlayerNumbers() {
-    Array.prototype.forEach.call($('playersBody').querySelectorAll('tr'), function (tr) {
-      var id = tr.getAttribute('data-id'), r = S.result.ratings[id], st = S.starts[id];
-      if (!r) return;
-      var ch = r.pti - st.pti, el = tr.querySelector('.now-ch');
-      tr.querySelector('.now-pti').textContent = fmt(r.pti);
-      tr.querySelector('.now-sigma').textContent = fmt(r.sigma);
+    var e = S.eng;
+    Array.prototype.forEach.call($('playersBody').querySelectorAll('tr[data-i]'), function (tr) {
+      var i = +tr.getAttribute('data-i'), ch = e.currentPti(i) - e.initPti[i], el = tr.querySelector('.now-ch');
+      tr.querySelector('.now-pti').textContent = fmt(e.currentPti(i));
+      tr.querySelector('.now-sigma').textContent = fmt(e.currentSigma(i));
       el.textContent = (ch >= 0 ? '+' : '') + fmt(ch);
       el.className = 'num now-ch ' + (ch > 0.005 ? 'up' : ch < -0.005 ? 'down' : '');
-      [['.start-pti', st.pti], ['.start-sigma', st.sigma]].forEach(function (a) {
+      [['.start-pti', e.initPti[i]], ['.start-sigma', e.initSigma[i]]].forEach(function (a) {
         var inp = tr.querySelector(a[0]); if (inp !== document.activeElement) inp.value = fmt(a[1]);
       });
     });
@@ -708,45 +768,49 @@
       return;
     }
     if (el.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;
-    el.innerHTML = S.overrides.map(function (o, i) {
-      var m = S.matches[o.matchIndex];
-      return '<div class="glass-card rounded-xl p-3" data-i="' + i + '">' +
+    var e = S.eng;
+    el.innerHTML = S.overrides.map(function (o, j) {
+      return '<div class="glass-card rounded-xl p-3" data-j="' + j + '">' +
         '<div class="flex items-center justify-between gap-2 mb-2"><span class="font-medium">' +
-        (S.slot[o.id] != null ? '<span class="chip" style="background:' + colorOf(o.id) + '"></span> ' : '') + esc(nameOf(o.id)) +
+        (S.slot[o.i] != null ? '<span class="chip" style="background:' + colorOf(o.i) + '"></span> ' : '') + esc(nameOf(o.i)) +
         '</span><button type="button" class="btn rm" title="Remove break">Remove</button></div>' +
-        '<div class="text-xs muted mb-2">Before match #' + (o.matchIndex + 1) + ' • ' + esc(m.date) + ' • ' + esc(m.score) + '</div>' +
+        '<div class="text-xs muted mb-2">Before match #' + num(o.k + 1) + ' • ' + esc(e.dates[o.k]) + ' • ' + esc(e.scores[o.k]) + '</div>' +
         '<div class="flex gap-3 text-xs items-center">' +
         '<label>PTI <input type="number" step="0.01" class="field field-sm b-pti" placeholder="keep" value="' + (o.pti != null ? fmt(o.pti) : '') + '"></label>' +
         '<label>Sigma <input type="number" step="0.01" min="0.01" class="field field-sm b-sigma" placeholder="keep" value="' + (o.sigma != null ? fmt(o.sigma) : '') + '"></label>' +
         '</div></div>';
     }).join('');
   }
+  function updateBreakInputs() {
+    Array.prototype.forEach.call($('breaksList').querySelectorAll('[data-j]'), function (div) {
+      var o = S.overrides[+div.getAttribute('data-j')]; if (!o) return;
+      [['.b-pti', o.pti], ['.b-sigma', o.sigma]].forEach(function (a) {
+        var inp = div.querySelector(a[0]); if (inp && inp !== document.activeElement) inp.value = a[1] != null ? fmt(a[1]) : '';
+      });
+    });
+  }
 
   function renderMatches() {
-    var body = $('matchesBody');
-    if (!S.result) { body.innerHTML = ''; $('matchesCount').textContent = ''; return; }
-    var shown = {}; S.selected.forEach(function (id) { shown[id] = true; });
-    var rows = [];
-    S.result.matches.forEach(function (row, k) {
-      var ids = [row.player1id, row.player2id, row.player3id, row.player4id];
-      if (row.error || ids.some(function (id) { return shown[id]; })) rows.push([row, k, ids]);
-    });
-    $('matchesCount').textContent = rows.length + ' matches' + (rows.length > 300 ? ', latest 300 shown' : '');
-    body.innerHTML = rows.slice(-300).reverse().map(function (x) {
-      var row = x[0], k = x[1], ids = x[2];
-      var cells = row.error && !('player1EndPti' in row)
-        ? '<span class="up">' + esc(row.error) + '</span>'
-        : ids.map(function (id, i) {
-            if (!shown[id]) return '';
-            var p = 'player' + (i + 1), d = row[p + 'Delta'], br = findOverride(id, k);
-            return '<span class="whitespace-nowrap mr-3"><span class="chip" style="background:' + colorOf(id) + '"></span> ' +
-              esc(nameOf(id)) + ': ' + (br ? '◆ ' : '') + fmt(row[p + 'StartPti']) + ' → ' + fmt(row[p + 'EndPti']) +
-              ' <span class="' + (d > 0.005 ? 'up' : d < -0.005 ? 'down' : '') + '">(' + (d >= 0 ? '+' : '') + fmt(d) + ')</span>' +
-              ' <span class="muted">σ ' + fmt(row[p + 'EndSigma']) + '</span></span>';
-          }).join('');
-      return '<tr><td class="muted">' + (k + 1) + '</td><td class="whitespace-nowrap">' + esc(row.date) + '</td>' +
-        '<td>' + esc(nameOf(ids[0])) + ' & ' + esc(nameOf(ids[1])) + '</td><td>' + esc(nameOf(ids[2])) + ' & ' + esc(nameOf(ids[3])) + '</td>' +
-        '<td class="whitespace-nowrap">' + esc(row.score) + '</td><td>' + cells + '</td></tr>';
+    var body = $('matchesBody'), e = S.eng;
+    if (!e) { body.innerHTML = ''; $('matchesCount').textContent = ''; return; }
+    var ks = new Set();
+    S.selected.forEach(function (i) { e.positions(i).forEach(function (pos) { ks.add(pos >> 2); }); });
+    var list = Array.from(ks).sort(function (a, b) { return b - a; });
+    $('matchesCount').textContent = num(list.length) + ' matches' + (list.length > MAX_MATCH_ROWS ? ', latest ' + MAX_MATCH_ROWS + ' shown' : '');
+    body.innerHTML = list.slice(0, MAX_MATCH_ROWS).map(function (k) {
+      var b = 4 * k;
+      var cells = [0, 1, 2, 3].map(function (s) {
+        var pos = b + s, i = e.pl[pos];
+        if (S.slot[i] == null) return '';
+        var sp = e.startPti(pos), d = e.endPti[pos] - sp;
+        return '<span class="whitespace-nowrap mr-3"><span class="chip" style="background:' + colorOf(i) + '"></span> ' +
+          esc(nameOf(i)) + ': ' + (e.hasOv[pos] ? '◆ ' : '') + fmt(sp) + ' → ' + fmt(e.endPti[pos]) +
+          ' <span class="' + (d > 0.005 ? 'up' : d < -0.005 ? 'down' : '') + '">(' + (d >= 0 ? '+' : '') + fmt(d) + ')</span>' +
+          ' <span class="muted">σ ' + fmt(e.endSigma[pos]) + '</span></span>';
+      }).join('');
+      return '<tr><td class="muted">' + num(k + 1) + '</td><td class="whitespace-nowrap">' + esc(e.dates[k]) + '</td>' +
+        '<td>' + esc(nameOf(e.pl[b])) + ' & ' + esc(nameOf(e.pl[b + 1])) + '</td><td>' + esc(nameOf(e.pl[b + 2])) + ' & ' + esc(nameOf(e.pl[b + 3])) + '</td>' +
+        '<td class="whitespace-nowrap">' + esc(e.scores[k]) + '</td><td>' + cells + '</td></tr>';
     }).join('');
   }
 
@@ -754,26 +818,48 @@
 
   // ---------- Downloads ----------
   function csvCell(v) { v = v == null ? '' : typeof v === 'number' ? String(Math.round(v * 10000) / 10000) : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
-  function download(name, text) {
+  function download(name, parts) {
     var a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv' }));
+    a.href = URL.createObjectURL(new Blob(parts, { type: 'text/csv' }));
     a.download = name; document.body.appendChild(a); a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 0);
   }
+  // Built in chunks, yielding between them, so a large file doesn't freeze the page
   function downloadResults() {
-    if (!S.result) return;
+    var e = S.eng; if (!e) return;
     var cols = ['date', 'player1id', 'player2id', 'player3id', 'player4id', 'score'];
     [1, 2, 3, 4].forEach(function (n) { ['StartPti', 'StartSigma', 'BreakDays', 'EndPti', 'EndSigma', 'Delta'].forEach(function (c) { cols.push('player' + n + c); }); });
     cols.push('error');
-    download('pti-results.csv', cols.join(',') + '\n' + S.result.matches.map(function (r) {
-      return cols.map(function (c) { return csvCell(r[c]); }).join(',');
-    }).join('\n') + '\n');
+    var parts = [cols.join(',') + '\n'], k = 0, CHUNK = 20000;
+    function r4(v) { return String(Math.round(v * 10000) / 10000); }
+    $('downloadBtn').disabled = true;
+    (function step() {
+      var lines = [];
+      for (var end = Math.min(e.n, k + CHUNK); k < end; k++) {
+        var line = csvCell(e.dates[k]) + ',' + csvCell(e.rawIds[0][k]) + ',' + csvCell(e.rawIds[1][k]) + ',' +
+          csvCell(e.rawIds[2][k]) + ',' + csvCell(e.rawIds[3][k]) + ',' + csvCell(e.scores[k]);
+        var rated = e.rated(k);
+        for (var s = 0; s < 4; s++) {
+          var pos = 4 * k + s;
+          if (!rated) { line += ',,,,,,'; continue; }
+          var sp = e.startPti(pos);
+          line += ',' + r4(sp) + ',' + r4(e.startSigma(pos)) + ',' + e.breakDays(pos) + ',' +
+            r4(e.endPti[pos]) + ',' + r4(e.endSigma[pos]) + ',' + r4(e.endPti[pos] - sp);
+        }
+        var err = e.status[k] ? e.error(k) : null;
+        lines.push(line + ',' + (err ? csvCell(err) : ''));
+      }
+      parts.push(lines.join('\n') + '\n');
+      if (k < e.n) { setStatus('Preparing results CSV… ' + Math.round(100 * k / e.n) + '%'); setTimeout(step, 0); return; }
+      $('downloadBtn').disabled = false;
+      setStatus('Results CSV ready: ' + num(e.n) + ' matches.');
+      download('pti-results.csv', parts);
+    })();
   }
   function downloadStarts() {
-    if (!S.result) return;
-    download('pti-starting-ratings.csv', 'id,name,pti,sigma,lastPlayed\n' + S.players.map(function (p) {
-      var s = S.starts[p.id]; return [p.id, p.name, s.pti, s.sigma, s.lastPlayed || ''].map(csvCell).join(',');
-    }).join('\n') + '\n');
+    var e = S.eng; if (!e) return;
+    var lines = S.players.map(function (p, i) { return [p.id, p.name, e.initPti[i], e.initSigma[i], p.lastPlayed || ''].map(csvCell).join(','); });
+    download('pti-starting-ratings.csv', ['id,name,pti,sigma,lastPlayed\n' + lines.join('\n') + '\n']);
   }
 
   // ---------- Sample data (fictional players) ----------
@@ -810,15 +896,19 @@
     cv.addEventListener('pointercancel', onPointerUp);
 
     $('resetStartsBtn').addEventListener('click', function () {
-      S.players.forEach(function (p) { S.starts[p.id] = { pti: p.pti, sigma: p.sigma, lastPlayed: p.lastPlayed }; });
-      if (S.result) { run(); renderAll(); }
+      var e = S.eng; if (!e) return;
+      S.players.forEach(function (p, i) { e.initPti[i] = p.pti; e.initSigma[i] = p.sigma; });
+      setPerf(e.runAll()); renderAll();
     });
-    $('clearBreaksBtn').addEventListener('click', function () { S.overrides = []; if (S.result) { run(); renderAll(); } });
+    $('clearBreaksBtn').addEventListener('click', function () {
+      if (!S.eng) return;
+      S.overrides = []; setPerf(S.eng.clearOverrides()); renderAll();
+    });
     $('downloadBtn').addEventListener('click', downloadResults);
     $('downloadStartsBtn').addEventListener('click', downloadStarts);
 
     $('playerSearch').addEventListener('input', function () { S.search = this.value; renderPlayers(); });
-    $('clearShownBtn').addEventListener('click', function () { S.selected = []; S.slot = {}; if (S.result) renderAll(); });
+    $('clearShownBtn').addEventListener('click', function () { S.selected = []; S.slot = {}; if (S.eng) renderAll(); });
     Array.prototype.forEach.call(document.querySelectorAll('th.sortable'), function (th) {
       th.tabIndex = 0;
       function sortBy() {
@@ -826,33 +916,34 @@
         // First click: shown first / A to Z / smallest first; click again to reverse
         S.sort = S.sort.key === key ? { key: key, dir: -S.sort.dir } : { key: key, dir: 1 };
         S.sortOrder = null;
-        if (S.result) renderPlayers(); else renderSortHeaders();
+        renderPlayers();
       }
       th.addEventListener('click', sortBy);
       th.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sortBy(); } });
     });
     $('playersBody').addEventListener('change', function (e) {
-      var tr = e.target.closest('tr'); if (!tr) return;
-      if (e.target.classList.contains('show')) { toggle(tr.getAttribute('data-id'), e.target.checked); renderAll(); }
+      var tr = e.target.closest('tr[data-i]'); if (!tr) return;
+      if (e.target.classList.contains('show')) { toggle(+tr.getAttribute('data-i'), e.target.checked); renderAll(); }
     });
     $('playersBody').addEventListener('input', function (e) {
-      var tr = e.target.closest('tr'), id = tr && tr.getAttribute('data-id'), v = parseFloat(e.target.value);
-      if (!id || isNaN(v)) return;
-      if (e.target.classList.contains('start-pti')) S.starts[id].pti = v;
-      else if (e.target.classList.contains('start-sigma')) { if (v <= 0) return; S.starts[id].sigma = v; }
+      var tr = e.target.closest('tr[data-i]'), v = parseFloat(e.target.value);
+      if (!tr || isNaN(v)) return;
+      var i = +tr.getAttribute('data-i'), eng = S.eng, res;
+      if (e.target.classList.contains('start-pti')) res = eng.setStart(i, v, eng.initSigma[i]);
+      else if (e.target.classList.contains('start-sigma')) { if (v <= 0) return; res = eng.setStart(i, eng.initPti[i], v); }
       else return;
-      run(); refreshChart(); updatePlayerNumbers(); renderMatches();
+      setPerf(res); refreshChart(); updatePlayerNumbers(); renderMatches();
     });
     $('breaksList').addEventListener('click', function (e) {
       if (!e.target.classList.contains('rm')) return;
-      var o = S.overrides[+e.target.closest('[data-i]').getAttribute('data-i')];
-      removeOverride(o.id, o.matchIndex);
+      var o = S.overrides[+e.target.closest('[data-j]').getAttribute('data-j')];
+      removeOverride(o.i, o.k);
     });
     $('breaksList').addEventListener('input', function (e) {
-      var o = S.overrides[+e.target.closest('[data-i]').getAttribute('data-i')], v = e.target.value.trim();
-      var field = e.target.classList.contains('b-pti') ? 'pti' : 'sigma';
-      if (v === '') delete o[field]; else if (!isNaN(parseFloat(v)) && !(field === 'sigma' && parseFloat(v) <= 0)) o[field] = parseFloat(v); else return;
-      run(); refreshChart(); updatePlayerNumbers(); renderMatches();
+      var o = S.overrides[+e.target.closest('[data-j]').getAttribute('data-j')], v = e.target.value.trim();
+      var f = e.target.classList.contains('b-pti') ? 'pti' : 'sigma';
+      if (v === '') delete o[f]; else if (!isNaN(parseFloat(v)) && !(f === 'sigma' && parseFloat(v) <= 0)) o[f] = parseFloat(v); else return;
+      setPerf(S.eng.setOverride(o.pos, o.pti, o.sigma)); refreshChart(); updatePlayerNumbers(); renderMatches();
     });
 
     $('themeToggleBtn').addEventListener('click', function () {
@@ -860,7 +951,7 @@
       document.documentElement.classList.toggle('dark', dark);
       try { localStorage.setItem('theme', dark ? 'dark' : 'light'); } catch (e) {}
       $('themeToggleLabel').textContent = dark ? 'Light Mode' : 'Dark Mode';
-      if (S.result) renderAll();
+      if (S.eng) renderAll();
     });
     $('themeToggleLabel').textContent = isDark() ? 'Light Mode' : 'Dark Mode';
 
@@ -872,8 +963,8 @@
     refreshChart();
   }
 
-  if (typeof pti24History !== 'function') {
-    setStatus('pti24-refactored.js and pti24-history.js must be in the same folder as this page.', true);
+  if (typeof PtiEngine !== 'function') {
+    setStatus('pti24-engine.js must be in the same folder as this page.', true);
   }
   init();
 })();
