@@ -251,6 +251,7 @@
               <th class="sortable" data-sort="show">Show</th><th class="sortable" data-sort="name">Player</th><th class="num sortable" data-sort="matches">Matches</th>
               <th class="num sortable" data-sort="startPti">Start PTI</th><th class="num sortable" data-sort="startSigma">Start sigma</th>
               <th class="num sortable" data-sort="nowPti">Now PTI</th><th class="num sortable" data-sort="change">Change</th><th class="num sortable" data-sort="nowSigma">Now sigma</th>
+              <th class="num sortable" data-sort="deltaOrig" title="Now PTI minus the PTI in the history as loaded (see Show original)">Δ Original</th>
             </tr></thead>
             <tbody id="playersBody"></tbody>
           </table>
@@ -480,7 +481,7 @@
         S.eng = new PtiEngine(r.rows, m);
         var t2 = performance.now();
         var run = S.eng.runAll();
-        S.orig = { pti: S.eng.endPti.slice(), sigma: S.eng.endSigma.slice() };
+        S.orig = { pti: S.eng.endPti.slice(), sigma: S.eng.endSigma.slice(), init: S.eng.initPti.slice() };
         S.overrides = []; S.selected = []; S.slot = {}; S.sortOrder = null; S.xs = null; S.excluded = []; S.groups = {};
         S.ratingsText = S.matchesText = null;  // free the raw text
         // Show the most active players first
@@ -840,12 +841,26 @@
         case 'nowPti': val[i] = e.currentPti(i); break;
         case 'change': val[i] = e.currentPti(i) - e.initPti[i]; break;
         case 'nowSigma': val[i] = e.currentSigma(i); break;
+        case 'deltaOrig': val[i] = e.root[i] === i ? deltaOrig(i) : NaN; break;
       }
     }
     order.sort(names
       ? function (a, b) { return (names[a] < names[b] ? -1 : names[a] > names[b] ? 1 : 0) * dir; }
-      : function (a, b) { return (val[a] - val[b]) * dir || (a - b); });
+      : function (a, b) {
+          var na = val[a] !== val[a], nb = val[b] !== val[b];  // NaN (linked-away ids) sorts last
+          return na || nb ? (na - nb) || (a - b) : (val[a] - val[b]) * dir || (a - b);
+        });
     return (S.sortOrder = order);
+  }
+  // Current PTI minus the PTI as loaded (the end of the "Show original" line)
+  function deltaOrig(i) {
+    var e = S.eng, pos = e.origLast[i];
+    return e.currentPti(i) - (pos >= 0 ? S.orig.pti[pos] : S.orig.init[i]);
+  }
+  function deltaCell(i, merged) {
+    var d = merged ? 0 : deltaOrig(i);
+    return '<td class="num now-dorig ' + (merged ? '' : d > 0.005 ? 'up' : d < -0.005 ? 'down' : '') + '">' +
+      (merged ? '–' : (d >= 0 ? '+' : '') + fmt(d)) + '</td>';
   }
   function renderSortHeaders() {
     Array.prototype.forEach.call(document.querySelectorAll('#playersHead th.sortable'), function (th) {
@@ -883,9 +898,9 @@
         '<td class="num"><input type="number" step="0.01" min="0.01" class="field field-sm start-sigma" value="' + fmt(e.initSigma[i]) + '"' + off + '></td>' +
         '<td class="num now-pti">' + (merged ? '–' : fmt(e.currentPti(i))) + '</td>' +
         '<td class="num now-ch ' + (merged ? '' : ch > 0.005 ? 'up' : ch < -0.005 ? 'down' : '') + '">' + (merged ? '–' : (ch >= 0 ? '+' : '') + fmt(ch)) + '</td>' +
-        '<td class="num now-sigma">' + (merged ? '–' : fmt(e.currentSigma(i))) + '</td></tr>';
+        '<td class="num now-sigma">' + (merged ? '–' : fmt(e.currentSigma(i))) + '</td>' + deltaCell(i, merged) + '</tr>';
     }).join('') + (matched > rows.length
-      ? '<tr><td colspan="8" class="muted text-center">Showing ' + num(rows.length) + ' of ' + num(matched) + ' players. Search or sort to find others.</td></tr>' : '');
+      ? '<tr><td colspan="9" class="muted text-center">Showing ' + num(rows.length) + ' of ' + num(matched) + ' players. Search or sort to find others.</td></tr>' : '');
     $('selCount').textContent = '(' + S.selected.length + ' of ' + MAX_SHOWN + ' shown)';
     $('clearShownBtn').disabled = !S.selected.length;
     $('linkShownBtn').disabled = S.selected.length < 2;
@@ -899,6 +914,7 @@
       tr.querySelector('.now-sigma').textContent = fmt(e.currentSigma(i));
       el.textContent = (ch >= 0 ? '+' : '') + fmt(ch);
       el.className = 'num now-ch ' + (ch > 0.005 ? 'up' : ch < -0.005 ? 'down' : '');
+      tr.querySelector('.now-dorig').outerHTML = deltaCell(i, false);
       [['.start-pti', e.initPti[i]], ['.start-sigma', e.initSigma[i]]].forEach(function (a) {
         var inp = tr.querySelector(a[0]); if (inp !== document.activeElement) inp.value = fmt(a[1]);
       });
