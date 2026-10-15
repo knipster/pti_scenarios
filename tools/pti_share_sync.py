@@ -3,7 +3,7 @@
 
 Pulls the "PTI full export" ratings.csv and matches.csv from MotherDuck
 (apta2.main.matches_unified), encrypts them the same way as
-`node tools/pti-share.mjs update`, and uploads them to the bucket's d/ folder.
+`tools/pti_share.py update` (or pti-share.mjs), and uploads them to the bucket's d/ folder.
 It reuses the data key in pti-share-secret.json, so every existing password
 keeps working, and only the two data files and the manifest change.
 
@@ -35,7 +35,7 @@ import sys
 import tempfile
 from base64 import b64decode
 
-# Must match tools/pti-share.mjs and SHARE in pti_interactive.html
+# Must match tools/pti_share.py, tools/pti-share.mjs and SHARE in pti_interactive.html
 DIR = 'd'
 
 BASE = r'''
@@ -118,7 +118,7 @@ def export(a, tmp):
 
 
 def seal(key, data):
-    """iv (12 bytes) || ciphertext || tag (16 bytes), as WebCrypto's AES-GCM and pti-share.mjs use."""
+    """iv (12 bytes) || ciphertext || tag (16 bytes), as WebCrypto's AES-GCM and pti_share.py use."""
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     iv = secrets.token_bytes(12)
     return iv + AESGCM(key).encrypt(iv, data, None)
@@ -147,7 +147,7 @@ def main():
     a = p.parse_args()
 
     if not os.path.exists(a.secret):
-        fail(a.secret + ' not found (pass --secret). Run `node tools/pti-share.mjs init` once first.')
+        fail(a.secret + ' not found (pass --secret). Run `python3 tools/pti_share.py init` once first.')
     with open(a.secret) as fh:
         s = json.load(fh)
     key = b64decode(s['dataKey'])
