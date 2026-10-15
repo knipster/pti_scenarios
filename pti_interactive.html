@@ -98,6 +98,9 @@
     th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
     th.sortable:hover, th.sortable:focus-visible { color: #6366f1 !important; outline: none; }
     th.sortable::after { content: attr(data-arrow); }
+    tr.excluded td { opacity: .55; }
+    tr.excluded td.use { opacity: 1; }
+    tr.excluded .teams, tr.excluded .score { text-decoration: line-through; }
     .chip { display: inline-block; width: .7rem; height: .7rem; border-radius: 999px; vertical-align: middle; }
     .up { color: #e11d48; } .down { color: #059669; }
     html.dark .up { color: #fb7185; } html.dark .down { color: #34d399; }
@@ -221,7 +224,7 @@
         </div>
         <div class="max-h-[28rem] overflow-auto">
           <table class="data">
-            <thead><tr>
+            <thead id="playersHead"><tr>
               <th class="sortable" data-sort="show">Show</th><th class="sortable" data-sort="name">Player</th><th class="num sortable" data-sort="matches">Matches</th>
               <th class="num sortable" data-sort="startPti">Start PTI</th><th class="num sortable" data-sort="startSigma">Start sigma</th>
               <th class="num sortable" data-sort="nowPti">Now PTI</th><th class="num sortable" data-sort="change">Change</th><th class="num sortable" data-sort="nowSigma">Now sigma</th>
@@ -244,11 +247,14 @@
     <section class="section border rounded-2xl overflow-hidden">
       <div class="section-head px-5 py-3.5 border-b flex items-center justify-between gap-3 flex-wrap">
         <span class="text-sm font-semibold uppercase tracking-wider">Matches for shown players</span>
-        <span id="matchesCount" class="text-xs muted"></span>
+        <div class="flex items-center gap-3">
+          <span id="matchesCount" class="text-xs muted"></span>
+          <button id="includeAllBtn" type="button" class="btn" style="display: none" title="Put every excluded match back into the calculation">Include all</button>
+        </div>
       </div>
       <div class="max-h-[32rem] overflow-auto">
         <table class="data">
-          <thead><tr><th>#</th><th>Date</th><th>Team 1</th><th>Team 2</th><th>Score</th><th>Shown players: start → end PTI (sigma)</th></tr></thead>
+          <thead id="matchesHead"><tr><th title="Untick to leave a match out of the calculation">Use</th><th>#</th><th class="sortable" data-msort="date">Date</th><th>Team 1</th><th>Team 2</th><th>Score</th><th>Shown players: start → end PTI (sigma)</th></tr></thead>
           <tbody id="matchesBody"></tbody>
         </table>
       </div>
@@ -275,7 +281,9 @@
     metric: 'Pti', xMode: 'date', mode: 'move', invert: false,
     search: '',
     sort: { key: null, dir: 1 },  // players table sort; null keeps file order
-    sortOrder: null               // player indexes in sorted order, set when a header is clicked
+    sortOrder: null,              // player indexes in sorted order, set when a header is clicked
+    excluded: [],                 // match indexes left out of the calculation
+    matchDir: -1                  // matches table date order: -1 newest first, 1 oldest first
   };
   var MAX_SHOWN = 8, MAX_TABLE_ROWS = 200, MAX_MATCH_ROWS = 300;
   // Categorical palette (fixed order), light and dark steps
@@ -406,7 +414,7 @@
         S.eng = new PtiEngine(r.rows, m);
         var t2 = performance.now();
         var run = S.eng.runAll();
-        S.overrides = []; S.selected = []; S.slot = {}; S.sortOrder = null; S.xs = null;
+        S.overrides = []; S.selected = []; S.slot = {}; S.sortOrder = null; S.xs = null; S.excluded = [];
         S.ratingsText = S.matchesText = null;  // free the raw text
         // Show the most active players first
         var top = [];
@@ -710,7 +718,7 @@
     return (S.sortOrder = order);
   }
   function renderSortHeaders() {
-    Array.prototype.forEach.call(document.querySelectorAll('th.sortable'), function (th) {
+    Array.prototype.forEach.call(document.querySelectorAll('#playersHead th.sortable'), function (th) {
       var on = th.getAttribute('data-sort') === S.sort.key;
       th.setAttribute('aria-sort', on ? (S.sort.dir > 0 ? 'ascending' : 'descending') : 'none');
       th.setAttribute('data-arrow', on ? (S.sort.dir > 0 ? ' ▲' : ' ▼') : '');
@@ -774,7 +782,8 @@
         '<div class="flex items-center justify-between gap-2 mb-2"><span class="font-medium">' +
         (S.slot[o.i] != null ? '<span class="chip" style="background:' + colorOf(o.i) + '"></span> ' : '') + esc(nameOf(o.i)) +
         '</span><button type="button" class="btn rm" title="Remove break">Remove</button></div>' +
-        '<div class="text-xs muted mb-2">Before match #' + num(o.k + 1) + ' • ' + esc(e.dates[o.k]) + ' • ' + esc(e.scores[o.k]) + '</div>' +
+        '<div class="text-xs muted mb-2">Before match #' + num(o.k + 1) + ' • ' + esc(e.dates[o.k]) + ' • ' + esc(e.scores[o.k]) +
+        (e.isExcluded(o.k) ? ' • <b>inactive while this match is excluded</b>' : '') + '</div>' +
         '<div class="flex gap-3 text-xs items-center">' +
         '<label>PTI <input type="number" step="0.01" class="field field-sm b-pti" placeholder="keep" value="' + (o.pti != null ? fmt(o.pti) : '') + '"></label>' +
         '<label>Sigma <input type="number" step="0.01" min="0.01" class="field field-sm b-sigma" placeholder="keep" value="' + (o.sigma != null ? fmt(o.sigma) : '') + '"></label>' +
@@ -792,14 +801,24 @@
 
   function renderMatches() {
     var body = $('matchesBody'), e = S.eng;
+    $('includeAllBtn').style.display = S.excluded.length ? '' : 'none';
+    var th = document.querySelector('#matchesHead th[data-msort]');
+    th.setAttribute('aria-sort', S.matchDir > 0 ? 'ascending' : 'descending');
+    th.setAttribute('data-arrow', S.matchDir > 0 ? ' ▲' : ' ▼');
     if (!e) { body.innerHTML = ''; $('matchesCount').textContent = ''; return; }
-    var ks = new Set();
+    var ks = new Set(), nEx = 0;
     S.selected.forEach(function (i) { e.positions(i).forEach(function (pos) { ks.add(pos >> 2); }); });
-    var list = Array.from(ks).sort(function (a, b) { return b - a; });
-    $('matchesCount').textContent = num(list.length) + ' matches' + (list.length > MAX_MATCH_ROWS ? ', latest ' + MAX_MATCH_ROWS + ' shown' : '');
+    // Excluded matches are no longer in the players' histories, so add them back here
+    S.excluded.forEach(function (k) {
+      for (var s = 0; s < 4; s++) if (S.slot[e.pl[4 * k + s]] != null) { ks.add(k); nEx++; break; }
+    });
+    var dir = S.matchDir;
+    var list = Array.from(ks).sort(function (a, b) { return (e.day[a] - e.day[b] || a - b) * dir; });
+    $('matchesCount').textContent = num(list.length) + ' matches' + (nEx ? ' (' + num(nEx) + ' excluded)' : '') +
+      (list.length > MAX_MATCH_ROWS ? ', ' + (dir < 0 ? 'latest ' : 'earliest ') + MAX_MATCH_ROWS + ' shown' : '');
     body.innerHTML = list.slice(0, MAX_MATCH_ROWS).map(function (k) {
-      var b = 4 * k;
-      var cells = [0, 1, 2, 3].map(function (s) {
+      var b = 4 * k, ex = e.isExcluded(k);
+      var cells = ex ? '<span class="muted">Excluded from the calculation</span>' : [0, 1, 2, 3].map(function (s) {
         var pos = b + s, i = e.pl[pos];
         if (S.slot[i] == null) return '';
         var sp = e.startPti(pos), d = e.endPti[pos] - sp;
@@ -808,10 +827,18 @@
           ' <span class="' + (d > 0.005 ? 'up' : d < -0.005 ? 'down' : '') + '">(' + (d >= 0 ? '+' : '') + fmt(d) + ')</span>' +
           ' <span class="muted">σ ' + fmt(e.endSigma[pos]) + '</span></span>';
       }).join('');
-      return '<tr><td class="muted">' + num(k + 1) + '</td><td class="whitespace-nowrap">' + esc(e.dates[k]) + '</td>' +
-        '<td>' + esc(nameOf(e.pl[b])) + ' & ' + esc(nameOf(e.pl[b + 1])) + '</td><td>' + esc(nameOf(e.pl[b + 2])) + ' & ' + esc(nameOf(e.pl[b + 3])) + '</td>' +
-        '<td class="whitespace-nowrap">' + esc(e.scores[k]) + '</td><td>' + cells + '</td></tr>';
+      return '<tr data-k="' + k + '"' + (ex ? ' class="excluded"' : '') + '>' +
+        '<td class="use"><input type="checkbox" class="use-chk" aria-label="Use match #' + num(k + 1) + ' in the calculation"' + (ex ? '' : ' checked') + '></td>' +
+        '<td class="muted">' + num(k + 1) + '</td><td class="whitespace-nowrap">' + esc(e.dates[k]) + '</td>' +
+        '<td class="teams">' + esc(nameOf(e.pl[b])) + ' & ' + esc(nameOf(e.pl[b + 1])) + '</td><td class="teams">' + esc(nameOf(e.pl[b + 2])) + ' & ' + esc(nameOf(e.pl[b + 3])) + '</td>' +
+        '<td class="whitespace-nowrap score">' + esc(e.scores[k]) + '</td><td>' + cells + '</td></tr>';
     }).join('');
+  }
+  function setExcluded(k, ex) {
+    var e = S.eng, at = S.excluded.indexOf(k);
+    if (ex && at < 0) { S.excluded.push(k); setPerf(e.exclude(k)); }
+    else if (!ex && at >= 0) { S.excluded.splice(at, 1); setPerf(e.include(k)); }
+    renderAll();
   }
 
   function renderAll() { refreshChart(); renderPlayers(); renderBreaks(); renderMatches(); }
@@ -909,7 +936,7 @@
 
     $('playerSearch').addEventListener('input', function () { S.search = this.value; renderPlayers(); });
     $('clearShownBtn').addEventListener('click', function () { S.selected = []; S.slot = {}; if (S.eng) renderAll(); });
-    Array.prototype.forEach.call(document.querySelectorAll('th.sortable'), function (th) {
+    Array.prototype.forEach.call(document.querySelectorAll('#playersHead th.sortable'), function (th) {
       th.tabIndex = 0;
       function sortBy() {
         var key = th.getAttribute('data-sort');
@@ -933,6 +960,24 @@
       else if (e.target.classList.contains('start-sigma')) { if (v <= 0) return; res = eng.setStart(i, eng.initPti[i], v); }
       else return;
       setPerf(res); refreshChart(); updatePlayerNumbers(); renderMatches();
+    });
+    var mth = document.querySelector('#matchesHead th[data-msort]');
+    mth.tabIndex = 0;
+    function flipMatches() { S.matchDir = -S.matchDir; renderMatches(); }
+    mth.addEventListener('click', flipMatches);
+    mth.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flipMatches(); } });
+    $('matchesBody').addEventListener('change', function (e) {
+      var tr = e.target.closest('tr[data-k]');
+      if (tr && e.target.classList.contains('use-chk')) setExcluded(+tr.getAttribute('data-k'), !e.target.checked);
+    });
+    $('includeAllBtn').addEventListener('click', function () {
+      var e = S.eng, t = performance.now(), n = 0;
+      if (!e) return;
+      // Put them back oldest first; each include reruns only what it affects
+      S.excluded.sort(function (a, b) { return a - b; }).forEach(function (k) { n += e.include(k).recalculated; });
+      S.excluded = [];
+      setPerf({ recalculated: n, ms: performance.now() - t });
+      renderAll();
     });
     $('breaksList').addEventListener('click', function (e) {
       if (!e.target.classList.contains('rm')) return;
