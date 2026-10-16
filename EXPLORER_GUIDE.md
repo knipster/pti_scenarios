@@ -54,6 +54,8 @@ id,name,pti,sigma,lastPlayed
 
 - Players 1 and 2 are one team, and players 3 and 4 the other.
 - The score is from team 1's side, with sets separated by commas. Put the score in quotes.
+- Tiebreak points go in brackets after a set's games, also from team 1's side: `6-6(7-5)` or a match tiebreak `1-0(10-8)`.
+- Sets count the way APTA counts them. A finished set counts its share of games. A set tied on games (6-6), or a match tiebreak, counts as 0.54 for the side that won the tiebreak. `1-0` without tiebreak points counts as 0.54 for the side with the game. Any other unfinished set, like `5-4`, doesn't count.
 - Dates can be `YYYY-MM-DD` or `M/D/YYYY`.
 
 ```csv

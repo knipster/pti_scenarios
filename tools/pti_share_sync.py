@@ -74,16 +74,28 @@ SELECT
     (Player1HELOStart IS NOT NULL AND Player2HELOStart IS NOT NULL
     AND Player1AELOStart IS NOT NULL AND Player2AELOStart IS NOT NULL
     AND Player1HELOConfidence IS NOT NULL AND Player2HELOConfidence IS NOT NULL
-    AND Player1AELOConfidence IS NOT NULL AND Player2AELOConfidence IS NOT NULL) AS rated,
-    concat_ws(', ',
-      CASE WHEN coalesce(decode("Set1.Team1Score"), '0') || coalesce(decode("Set1.Team2Score"), '0') <> '00' THEN decode("Set1.Team1Score") || '-' || decode("Set1.Team2Score") END,
-      CASE WHEN coalesce(decode("Set2.Team1Score"), '0') || coalesce(decode("Set2.Team2Score"), '0') <> '00' THEN decode("Set2.Team1Score") || '-' || decode("Set2.Team2Score") END,
-      CASE WHEN coalesce(decode("Set3.Team1Score"), '0') || coalesce(decode("Set3.Team2Score"), '0') <> '00' THEN decode("Set3.Team1Score") || '-' || decode("Set3.Team2Score") END,
-      CASE WHEN coalesce(decode("Set4.Team1Score"), '0') || coalesce(decode("Set4.Team2Score"), '0') <> '00' THEN decode("Set4.Team1Score") || '-' || decode("Set4.Team2Score") END,
-      CASE WHEN coalesce(decode("Set5.Team1Score"), '0') || coalesce(decode("Set5.Team2Score"), '0') <> '00' THEN decode("Set5.Team1Score") || '-' || decode("Set5.Team2Score") END
-    ) AS score
+    AND Player1AELOConfidence IS NOT NULL AND Player2AELOConfidence IS NOT NULL
+    -- APTA only rates these result codes; the others (defaults, forfeits, ...) never change a rating
+    AND decode(Winner) IN ('1', '2', '7', '8')) AS rated,
+    concat_ws(', ', {sets}) AS score
   FROM "apta2"."main"."matches_unified"
 '''
+
+
+def set_score(n):
+    """Set n as "games-games", plus "(points-points)" when it has tiebreak points.
+    The explorer decides from these which sets count (see parseSets in
+    pti24-engine.js). Left out: sets with nothing played, and a 1-0 set with no
+    tiebreak points that APTA doesn't count (missing tiebreak or a result code
+    other than 1 or 2), because the explorer can't tell those from ones it does."""
+    a, b, x, y = (f'TRY_CAST(decode("Set{n}.{c}") AS INTEGER)' for c in ('Team1Score', 'Team2Score', 'T1TieBreak', 'T2TieBreak'))
+    tb = f'coalesce({x}, 0) + coalesce({y}, 0)'
+    return (f"CASE WHEN {a} IS NULL OR {b} IS NULL OR {a} + {b} + {tb} = 0 THEN NULL"
+            f" WHEN {a} + {b} = 1 AND {tb} = 0 AND ({x} IS NULL OR decode(Winner) NOT IN ('1', '2')) THEN NULL"
+            f" ELSE {a} || '-' || {b} || CASE WHEN {tb} > 0 THEN '(' || {x} || '-' || {y} || ')' ELSE '' END END")
+
+
+BASE = BASE.replace('{sets}', ', '.join(set_score(n) for n in range(1, 6)))
 
 MATCHES = '''
   SELECT strftime(ts, '%Y-%m-%d') AS date,
