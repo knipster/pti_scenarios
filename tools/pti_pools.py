@@ -138,7 +138,8 @@ def short_name(name):
 
 
 class Placeholders:
-    """Stable placeholder ids and names, keyed by the secret's placeholder key."""
+    """Placeholder ids and names. The sync gives each run a fresh random key, so every
+    export renames every restricted player."""
 
     def __init__(self, key, real_names):
         self.key = key
@@ -169,13 +170,8 @@ class Placeholders:
 
 
 # ---------- Keys in the secret file ----------
-# s['pools'] = {name: {'key': b64, 'rotate': bool}}; s['placeholderKey'] = b64
+# s['pools'] = {name: {'key': b64, 'rotate': bool}}
 # each password: {'label', 'file', 'added', 'wrap': b64 (its key-file key), 'pools': [names] or 'all'}
-
-def placeholder_key(s):
-    if not s.get('placeholderKey'):
-        s['placeholderKey'] = b64(secrets.token_bytes(32))
-    return unb64(s['placeholderKey'])
 
 
 def ensure_pool(s, name):
