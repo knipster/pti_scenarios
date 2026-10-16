@@ -58,6 +58,15 @@
     html.dark .field { background: #1f2937; border-color: #374151; color: #f3f4f6; }
     html:not(.dark) .field { background: #ffffff; border-color: #cbd5e1; color: #0f172a; }
     .field:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.25); }
+    /* Search boxes with a clear (×) button, sized for touch */
+    .search-wrap { position: relative; display: inline-block; width: 100%; max-width: 14rem; }
+    .search-wrap .field { padding-right: 2.25rem; }
+    .search-wrap input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+    .search-clear { position: absolute; right: .125rem; top: 50%; transform: translateY(-50%); width: 2rem; height: 2rem;
+      display: none; align-items: center; justify-content: center; border-radius: 9999px; font-size: 1.15rem; line-height: 1; cursor: pointer; }
+    .search-wrap.has-text .search-clear { display: flex; }
+    html.dark .search-clear { color: #9ca3af; } html.dark .search-clear:hover { background: #374151; color: #f3f4f6; }
+    html:not(.dark) .search-clear { color: #64748b; } html:not(.dark) .search-clear:hover { background: #e2e8f0; color: #0f172a; }
     .field-sm { padding: .25rem .4rem; width: 5.25rem; font-variant-numeric: tabular-nums; }
 
     .btn {
@@ -248,7 +257,7 @@
         <div class="section-head px-5 py-3.5 border-b flex items-center justify-between gap-3 flex-wrap">
           <span class="text-sm font-semibold uppercase tracking-wider">Players <span id="selCount" class="muted normal-case font-normal"></span></span>
           <div class="flex items-center gap-2">
-            <input id="playerSearch" class="field" style="max-width: 14rem" placeholder="Search players">
+            <span class="search-wrap"><input id="playerSearch" type="search" class="field" placeholder="Search players" aria-label="Search players"><button type="button" class="search-clear" aria-label="Clear search" title="Clear">×</button></span>
             <button id="linkShownBtn" type="button" class="btn" title="Link the shown players into one group (or add them to the one group already shown)">Link shown</button>
             <button id="clearShownBtn" type="button" class="btn" title="Hide every player from the chart">Clear shown</button>
           </div>
@@ -297,7 +306,7 @@
       <div class="section-head px-5 py-3.5 border-b flex items-center justify-between gap-3 flex-wrap">
         <span class="text-sm font-semibold uppercase tracking-wider">Matches for shown players</span>
         <div class="flex items-center gap-3 flex-wrap">
-          <input id="matchSearch" type="search" class="field" style="max-width: 14rem" placeholder="Filter by player" title="Only list matches with a player whose name or id contains this (as partner or opponent). Doesn't change the calculation." aria-label="Filter matches by player">
+          <span class="search-wrap"><input id="matchSearch" type="search" class="field" placeholder="Filter by player" title="Only list matches with a player whose name or id contains this (as partner or opponent). Doesn't change the calculation." aria-label="Filter matches by player"><button type="button" class="search-clear" aria-label="Clear filter" title="Clear">×</button></span>
           <span id="matchesCount" class="text-xs muted"></span>
           <button id="includeAllBtn" type="button" class="btn" style="display: none" title="Put every excluded match back into the calculation">Include all</button>
         </div>
@@ -1394,6 +1403,15 @@
 
     $('playerSearch').addEventListener('input', function () { S.search = this.value; renderPlayers(); });
     $('matchSearch').addEventListener('input', function () { S.matchSearch = this.value; renderMatches(); });
+    // Clear (×) buttons: shown while a search box has text; clearing runs the box's own input handler
+    Array.prototype.forEach.call(document.querySelectorAll('.search-wrap'), function (w) {
+      var inp = w.querySelector('input'), sync = function () { w.classList.toggle('has-text', inp.value !== ''); };
+      inp.addEventListener('input', sync);
+      w.querySelector('.search-clear').addEventListener('click', function () {
+        inp.value = ''; inp.dispatchEvent(new Event('input')); inp.focus();
+      });
+      sync();
+    });
     $('linkShownBtn').addEventListener('click', linkShown);
     $('linksList').addEventListener('click', function (e) {
       var b = e.target.closest('button'), card = e.target.closest('[data-root]');
