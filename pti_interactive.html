@@ -278,7 +278,7 @@
         <div class="max-h-[28rem] overflow-auto">
           <table class="data">
             <thead id="playersHead"><tr>
-              <th class="sortable" data-sort="show">Show</th><th class="sortable" data-sort="name">Player</th><th class="num sortable" data-sort="matches">Matches</th>
+              <th>Show</th><th class="sortable" data-sort="name">Player</th><th class="num sortable" data-sort="matches">Matches</th>
               <th class="num sortable" data-sort="startPti">Start PTI</th><th class="num sortable" data-sort="startSigma">Start sigma</th>
               <th class="num sortable" data-sort="nowPti">Now PTI</th><th class="num sortable" data-sort="change">Change</th><th class="num sortable" data-sort="nowSigma">Now sigma</th>
               <th class="num sortable" data-sort="deltaOrig" title="Now PTI minus the PTI in the history as loaded (see Show original)">Δ Original</th>
@@ -904,15 +904,20 @@
 
   // Players table order: fixed when a header is clicked, so rows don't jump
   // while you tick boxes or drag; click the header again to re-sort.
+  // Shown players always come first, each part in the chosen column's order
   function sortedPlayers() {
+    var base = sortedByColumn(), shown = [], rest = [];
+    for (var j = 0; j < base.length; j++) (S.slot[base[j]] != null ? shown : rest).push(base[j]);
+    return shown.concat(rest);
+  }
+  function sortedByColumn() {
     var e = S.eng, key = S.sort.key, dir = S.sort.dir, n = S.players.length;
     if (S.sortOrder) return S.sortOrder;
     var order = new Array(n); for (var i = 0; i < n; i++) order[i] = i;
-    if (!key) return order;
+    if (!key) return (S.sortOrder = order);
     var val = new Float64Array(n), names = key === 'name' ? S.players.map(function (p) { return p.name.toLowerCase(); }) : null;
     for (i = 0; i < n; i++) {
       switch (key) {
-        case 'show': val[i] = S.selected.indexOf(i) >= 0 ? 0 : 1; break;
         case 'matches': val[i] = e.count[i]; break;
         case 'startPti': val[i] = e.initPti[i]; break;
         case 'startSigma': val[i] = e.initSigma[i]; break;
