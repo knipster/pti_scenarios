@@ -23,11 +23,11 @@ There are three ways to load each file:
 - Type a URL in the box underneath and click **Load URLs**.
 - Put both URLs in the page address: `pti_interactive.html?ratings=ratings.csv&matches=matches.csv`. A URL on another site only works if that site allows cross-origin requests.
 
-Once both files load, the status line reports how many players and matches were read and how long it took. It also says how many rating rows were skipped and how many matches couldn't be rated. The Data column then collapses to a slim rail showing the number of players (PTI) and matches (MAT), written as 75k or 1.2M once they pass a thousand or a million. Hover over the rail for the full status line, and click it or the header button to open the column again. On a phone the column opens as a drawer over the page and has no rail; tap outside it or **Hide** to close it.
+Once both files load, the status line reports how many players and matches were read and how long it took. It also says how many rating rows were skipped and how many matches couldn't be rated. The Data column then collapses to a slim rail showing the number of players (PLAY) and matches (MTCH), written as 75k or 1.2M once they pass a thousand or a million. Hover over the rail for the full status line, and click it or the header button to open the column again. On a phone the column opens as a drawer over the page and has no rail; tap outside it or **Hide** to close it.
 
 ### CSV format
 
-Click **CSV format** on the page for a short version of this.
+Click the **CSV format** link next to **Data** on the page for a short version of this.
 
 **Starting ratings** has one row per player. It needs the columns `id`, `pti` and `sigma`, and can also have `name` and `lastPlayed`.
 
