@@ -676,16 +676,17 @@
     if (text != null && S.players.length) {
       var rows = readGroups(text), idx = new Map(), byKey = new Map(), of = new Map(), types = new Set();
       S.players.forEach(function (p, i) { idx.set(p.id, i); });
+      // A group's label may sit on just one of its rows, and that row can be a player who isn't loaded
+      var labels = new Map();
+      rows.forEach(function (g) { if (g.label) labels.set(g.type + '\t' + g.group, g.label); });
       rows.forEach(function (g) {
         var i = idx.get(g.player); if (i == null) return;
         var key = g.type + '\t' + g.group, e = byKey.get(key);
-        if (!e) { byKey.set(key, e = { key: key, type: g.type, group: g.group, label: '', players: [] }); types.add(g.type); }
-        if (g.label && !e.label) e.label = g.label;
+        if (!e) { byKey.set(key, e = { key: key, type: g.type, group: g.group, label: labels.get(key) || g.group, players: [] }); types.add(g.type); }
         e.players.push(i);
         var set = of.get(i); if (!set) of.set(i, set = new Set());
         set.add(key);
       });
-      byKey.forEach(function (e) { if (!e.label) e.label = e.group; });
       if (byKey.size) S.pg = { byKey: byKey, of: of, types: Array.from(types).sort() };
     }
     S.pgFilter = new Set();
