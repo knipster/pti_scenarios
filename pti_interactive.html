@@ -257,7 +257,7 @@
       <div id="dataBody" class="p-4 sm:p-5 space-y-4">
         <div id="formatHelp" class="hidden glass-card rounded-xl p-4 text-xs leading-relaxed">
           <p class="mb-2"><b>Starting ratings</b>: one row per player. Columns <code>id, pti, sigma</code>; optional <code>name</code> and <code>lastPlayed</code> (date of their match before the history starts, for break days). If the sigma is an official "Start Sigma" it already includes time decay, so leave <code>lastPlayed</code> empty.</p>
-          <p class="mb-2"><b>Matches</b>: one row per match, oldest first. Columns <code>date, player1id, player2id, player3id, player4id, score</code>. Players 1 and 2 are a team; the score is from their side, sets separated by commas (quote it), e.g. <code>"6-3, 4-6, 1-0"</code>. Dates as <code>YYYY-MM-DD</code> or <code>M/D/YYYY</code>.</p>
+          <p class="mb-2"><b>Matches</b>: one row per match, oldest first. Columns <code>date, player1id, player2id, player3id, player4id, score</code>. Players 1 and 2 are a team; the score is from their side, sets separated by commas (quote it), e.g. <code>"6-3, 4-6, 1-0"</code>. Tiebreak points go in brackets, e.g. <code>6-6(7-5)</code> or <code>1-0(10-8)</code>; unfinished sets like <code>5-4</code> don't count, as in APTA's ratings. Dates as <code>YYYY-MM-DD</code> or <code>M/D/YYYY</code>.</p>
           <p>Files can be dropped on the boxes below, chosen from disk, or loaded from URLs. URLs can also go in this page's address: <code>pti_interactive.html?ratings=ratings.csv&amp;matches=matches.csv</code>. URLs on another site need that site to allow cross-origin requests.</p>
         </div>
 
