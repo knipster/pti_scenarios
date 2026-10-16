@@ -64,6 +64,7 @@ import pti_pools  # noqa: E402
 # Must match tools/pti_share.py, tools/pti-share.mjs and SHARE in pti_interactive.html
 DIR = 'd'
 
+# Every query below is documented in tools/QUERIES.md; keep the two in step
 BASE = r'''
 SELECT
     timezone('America/New_York', timezone('UTC', decode("Date")::TIMESTAMP)) AS ts,
