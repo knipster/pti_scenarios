@@ -56,7 +56,7 @@ Add `--out staging` to any `pti_share_sync.py` command to do the same for the co
 
 ## Refresh the data from MotherDuck
 
-`tools/pti_share_sync.py` does the whole update in one step. It runs the "PTI full export" queries against `apta2.main.matches_unified` in MotherDuck, encrypts the two CSVs with the data key in your `pti-share-secret.json`, and uploads them to the bucket's `d/` folder (or another site folder's, with `--out`). Existing passwords keep working, and the old data files are deleted from the bucket afterwards.
+`tools/pti_share_sync.py` does the whole update in one step. It runs the "PTI full export" queries against `apta2.main.matches_unified` in MotherDuck, encrypts the two CSVs with the data key in your `pti-share-secret.json`, and uploads them to the bucket's `d/` folder (or another site folder's, with `--out`). Existing passwords keep working, and the old data files are deleted from the bucket afterwards. [QUERIES.md](QUERIES.md) lists every query it runs and what each one produces.
 
 It needs Python 3.9 or newer and three packages:
 
