@@ -152,6 +152,10 @@
         </div>
       </div>
       <div class="flex items-center gap-3">
+        <button id="shareBtn" type="button" class="btn" title="Copy a link to this view: shown players, your edits and the chart options. The data itself isn't in the link.">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12s-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
+          <span id="shareLabel">Share</span>
+        </button>
         <button id="themeToggleBtn" type="button" class="btn">
           <svg class="w-4 h-4 text-amber-500 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
           <svg class="w-4 h-4 text-indigo-600 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"></path></svg>
@@ -518,6 +522,11 @@
         setPerf(null);
         renderAll();
         setDataOpen(false);  // data is in: give the room to the chart
+        // A shared view in the address waits for data, then applies to the first data set loaded
+        if (S.pendingView) {
+          var eng = S.eng, pending = S.pendingView; S.pendingView = null;
+          pending.then(function (v) { if (v && S.eng === eng) applyView(v); });
+        }
       } catch (e) { setStatus(e.message, true); }
     }, 30);
   }
@@ -1177,6 +1186,137 @@
     el.innerHTML = 'Predictive accuracy <b class="' + cls + '">' + pct(c) + '</b> (original ' + pct(o) + ')' + diff +
       ' <span class="opacity-75">• ' + num(c.n) + ' matches</span>';
   }
+  // ---------- Share link ----------
+  // The link carries the view and the edits, never the data. Players are kept
+  // by id and matches by their day and four ids (#2, #3… for repeats that day),
+  // so a link still fits a later export of the same data. Whatever the loaded
+  // data doesn't have is skipped.
+  function matchKeys(days) {  // key -> match index, for the matches on these days
+    var e = S.eng, seen = new Map(), out = new Map();
+    for (var k = 0; k < e.n; k++) {
+      if (!days.has(e.day[k])) continue;
+      var key = e.day[k] + ':' + e.rawIds[0][k] + ',' + e.rawIds[1][k] + ',' + e.rawIds[2][k] + ',' + e.rawIds[3][k];
+      var n = (seen.get(key) || 0) + 1; seen.set(key, n);
+      out.set(n > 1 ? key + '#' + n : key, k);
+    }
+    return out;
+  }
+  function round4(v) { return Math.round(v * 1e4) / 1e4; }
+  function collectView() {
+    var e = S.eng, keyOf = new Map(), starts = {};
+    var ks = S.excluded.concat(S.overrides.map(function (o) { return o.k; }));
+    matchKeys(new Set(ks.map(function (k) { return e.day[k]; }))).forEach(function (k, key) { keyOf.set(k, key); });
+    S.players.forEach(function (p, i) {
+      if (e.initPti[i] !== p.pti || e.initSigma[i] !== p.sigma) starts[e.ids[i]] = [round4(e.initPti[i]), round4(e.initSigma[i])];
+    });
+    return {
+      v: 1,
+      show: S.selected.map(function (i) { return e.ids[i]; }),
+      links: Object.keys(S.groups).map(function (r) { return S.groups[r].map(function (i) { return e.ids[i]; }); }),
+      starts: starts,
+      breaks: S.overrides.map(function (o) {
+        return [String(e.rawIds[o.pos & 3][o.k]), keyOf.get(o.k), o.pti != null ? round4(o.pti) : null, o.sigma != null ? round4(o.sigma) : null];
+      }),
+      excl: S.excluded.map(function (k) { return keyOf.get(k); }),
+      chart: { metric: S.metric, x: S.xMode, invert: S.invert ? 1 : 0, orig: S.showOrig ? 1 : 0, y: S.yScale, ySpan: S.ySpan }
+    };
+  }
+  function applyView(v) {
+    var e = S.eng, skipped = 0, t = performance.now();
+    function idx(id) { var i = e.index.get(String(id)); if (i === undefined) skipped++; return i; }
+    function known(i) { return i !== undefined; }
+    // Links first: breaks and the chart follow the groups
+    (v.links || []).forEach(function (g) {
+      var ids = g.map(idx).filter(known);
+      for (var j = 1; j < ids.length; j++) e.link(ids[0], ids[j]);
+    });
+    rebuildGroups();
+    Object.keys(v.starts || {}).forEach(function (id) {
+      var i = idx(id), a = v.starts[id];
+      if (known(i) && isFinite(a[0]) && a[1] > 0) e.setStart(i, +a[0], +a[1]);
+    });
+    var days = new Set();
+    (v.excl || []).concat((v.breaks || []).map(function (b) { return b[1]; })).forEach(function (key) { if (key) days.add(+key.split(':')[0]); });
+    var keyed = days.size ? matchKeys(days) : new Map();
+    (v.excl || []).forEach(function (key) {
+      var k = keyed.get(key);
+      if (k === undefined) { skipped++; return; }
+      e.exclude(k);
+      if (e.isExcluded(k) && S.excluded.indexOf(k) < 0) S.excluded.push(k);
+    });
+    (v.breaks || []).forEach(function (b) {
+      var k = keyed.get(b[1]), s = -1;
+      if (k !== undefined) for (var q = 0; q < 4; q++) if (String(e.rawIds[q][k]) === String(b[0])) s = q;
+      var pos = 4 * k + s, pti = b[2] != null && isFinite(b[2]) ? +b[2] : null, sigma = b[3] > 0 ? +b[3] : null;
+      if (s < 0 || e.pl[pos] < 0 || (pti === null && sigma === null) || S.overrides.some(function (o) { return o.pos === pos; })) { skipped++; return; }
+      var o = { i: e.pl[pos], k: k, pos: pos };
+      if (pti !== null) o.pti = pti;
+      if (sigma !== null) o.sigma = sigma;
+      S.overrides.push(o);
+      e.setOverride(pos, pti, sigma);
+    });
+    S.overrides.sort(function (a, b) { return a.k - b.k; });
+    var show = [];
+    (v.show || []).forEach(function (id) { var i = idx(id); if (known(i) && show.indexOf(e.root[i]) < 0) show.push(e.root[i]); });
+    // Nobody from the link in this data: keep the players already shown, as their groups
+    if (!show.length) S.selected.forEach(function (i) { if (show.indexOf(e.root[i]) < 0) show.push(e.root[i]); });
+    S.selected = []; S.slot = {}; show.slice(0, MAX_SHOWN).forEach(function (i) { toggle(i, true); });
+    var c = v.chart || {};
+    if (c.metric === 'Pti' || c.metric === 'Sigma') S.metric = c.metric;
+    if (c.x === 'index' || c.x === 'date') S.xMode = c.x;
+    if (c.y === 'fit' || c.y === 'min' || c.y === 'custom') S.yScale = c.y;
+    if (c.ySpan > 0) S.ySpan = +c.ySpan;
+    S.invert = !!c.invert; S.showOrig = !!c.orig;
+    syncControls();
+    S.sortOrder = null;
+    setPerf({ recalculated: e.n, ms: performance.now() - t });
+    renderAll();
+    var el = $('status');
+    setStatus(el.textContent + ' Shared view applied' + (skipped ? ' (' + num(skipped) + ' item' + (skipped > 1 ? 's' : '') + ' not in this data skipped)' : '') + '.', false);
+  }
+  function syncControls() {
+    [['metricSeg', S.metric], ['xSeg', S.xMode], ['yScaleSeg', S.yScale], ['modeSeg', S.mode]].forEach(function (a) {
+      Array.prototype.forEach.call($(a[0]).children, function (b) { b.classList.toggle('on', b.getAttribute('data-v') === a[1]); });
+    });
+    $('ySpan').value = S.ySpan; $('ySpan').style.display = S.yScale === 'custom' ? '' : 'none';
+    $('invertChk').checked = S.invert; $('origChk').checked = S.showOrig;
+  }
+  function b64url(bytes) {
+    var s = '';
+    for (var i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function unb64url(str) {
+    var s = atob(str.replace(/-/g, '+').replace(/_/g, '/')), out = new Uint8Array(s.length);
+    for (var i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+    return out;
+  }
+  // 'z' + deflated JSON where the browser can compress, else 'j' + plain JSON
+  function packView(v) {
+    var json = new TextEncoder().encode(JSON.stringify(v));
+    if (typeof CompressionStream !== 'function') return Promise.resolve('j' + b64url(json));
+    return new Response(new Blob([json]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer()
+      .then(function (b) { return 'z' + b64url(new Uint8Array(b)); });
+  }
+  function unpackView(code) {
+    var bytes = unb64url(code.slice(1));
+    var text = code[0] === 'z'
+      ? new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text()
+      : Promise.resolve(new TextDecoder().decode(bytes));
+    return text.then(function (t) { var v = JSON.parse(t); return v && v.v === 1 ? v : null; });
+  }
+  function shareView() {
+    var label = $('shareLabel');
+    function flash(msg) { label.textContent = msg; clearTimeout(shareView.t); shareView.t = setTimeout(function () { label.textContent = 'Share'; }, 2500); }
+    if (!S.eng) { flash('Load data first'); return; }
+    packView(collectView()).then(function (code) {
+      var q = new URLSearchParams(location.search); q.set('view', code);
+      var url = location.href.split(/[?#]/)[0] + '?' + q.toString();
+      var copy = navigator.clipboard && window.isSecureContext ? navigator.clipboard.writeText(url) : Promise.reject();
+      copy.then(function () { flash('Link copied'); }, function () { window.prompt('Copy this link to share the view:', url); });
+    });
+  }
+
   function renderAll() { renderAccuracy(); refreshChart(); renderPlayers(); renderBreaks(); renderLinks(); renderMatches(); }
 
   // ---------- Downloads ----------
@@ -1492,8 +1632,13 @@
     });
     $('themeToggleLabel').textContent = isDark() ? 'Light Mode' : 'Dark Mode';
 
-    // ?ratings=URL&matches=URL loads on open
+    $('shareBtn').addEventListener('click', shareView);
+
+    // ?ratings=URL&matches=URL loads on open; ?view=… (a shared view) waits for the data
     var q = new URLSearchParams(location.search);
+    if (q.get('view') && typeof DecompressionStream === 'function' || /^j/.test(q.get('view') || '')) {
+      S.pendingView = unpackView(q.get('view')).catch(function () { return null; });
+    }
     if (q.get('ratings')) $('ratingsUrl').value = q.get('ratings');
     if (q.get('matches')) $('matchesUrl').value = q.get('matches');
     if (q.get('ratings') && q.get('matches')) loadUrls(q.get('ratings'), q.get('matches'));

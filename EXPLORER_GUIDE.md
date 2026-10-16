@@ -145,6 +145,14 @@ Untick a match's **Use** box to leave it out of the calculation, for example a r
 
 A match where two linked ids of the same player meet is marked "Not rated: linked players are both in this match".
 
+## Sharing a view
+
+Click **Share** in the header to copy a link to what you're looking at. The link holds the shown players, linked ids, starting rating and sigma changes, breaks, excluded matches and the chart options. It doesn't hold the data itself; if the page was opened with `?ratings=` and `?matches=` URLs, those stay in the link.
+
+When someone opens the link, the page waits until they load a data set, then applies the view to it. Anything the data doesn't have, such as a player id or a match that isn't in it, is skipped, and the status line says how many items were skipped. Matches are found by their date and four player ids, so a link still works on a later export of the same data.
+
+If the browser can't copy to the clipboard, the page shows the link in a box to copy by hand.
+
 ## Tips
 
 - **Try a what-if:** show a player, drag their start point, and watch their partners' and opponents' lines move too. The predictive accuracy line tells you whether the change fits the results better.
