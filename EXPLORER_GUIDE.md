@@ -108,14 +108,13 @@ Hover a spread line for its PTI after each match and how far it is from the play
 
 ## Players and linked ids
 
-The Players table lists every player, with their starting and current ratings. Tick **Show** to put a player on the chart (up to 8). **Clear shown** takes everyone off the chart.
+The Players table lists every player, with their starting and current ratings. Click a player's name to put them on the chart (up to 8), and click it again to take them off. A shown player has a dot in their line's colour next to their name, and players not on the chart have an empty ring. Shown players are listed first. **Clear shown** takes everyone off the chart.
 
 Type in **Search players** to find players by name or id, and click or tap its × to clear it. Click a column header to sort by it, and click again to reverse the order. The table lists up to 200 rows at a time, so search or sort to reach the rest.
 
 | Column | Meaning |
 | --- | --- |
-| Show | Whether the player is on the chart. |
-| Player | Name and id. |
+| Player | Name and id. Click it to show or hide the player on the chart. |
 | Matches | Matches the player is in. |
 | Now PTI | Rating after the player's last match, with all your edits. |
 | Start PTI, Start sigma | Starting rating. Edit the boxes to change it. |
@@ -131,13 +130,12 @@ Switch the table from **Players** to **Partners** or **Opponents** to see who on
 
 | Column | Meaning |
 | --- | --- |
-| Show | Whether the partner or opponent is on the chart. Tick it to add them. |
-| Player | Name and id. |
+| Player | Name and id. Click it to show or hide that partner or opponent on the chart. |
 | Matches with / Matches against | Rated matches the two played together, or against each other. |
 | Cumulative PTI contribution | The sum of the picked player's PTI changes in those matches, with all your edits. |
 | Per match | Cumulative PTI contribution divided by the matches. |
 
-Lower PTI is better, so a green (negative) contribution means those matches brought the picked player's PTI down, and red means they pushed it up. The last row adds up all of the player's matches, which is their whole PTI change; in Opponents each match has two opponents, so the opponents' contributions add up to twice that. Players in a restricted pool your password doesn't unlock are listed as 🔒 Restricted, without a name or a Show box, as in the Matches table. **Search players** filters these lists too.
+Lower PTI is better, so a green (negative) contribution means those matches brought the picked player's PTI down, and red means they pushed it up. The last row adds up all of the player's matches, which is their whole PTI change; in Opponents each match has two opponents, so the opponents' contributions add up to twice that. Players in a restricted pool your password doesn't unlock are listed as 🔒 Restricted, without a name and can't be clicked, as in the Matches table. **Search players** filters these lists too.
 
 ### Linking duplicate ids
 
