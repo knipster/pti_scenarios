@@ -290,8 +290,9 @@
           <table class="data">
             <thead id="playersHead"><tr>
               <th>Show</th><th class="sortable" data-sort="name">Player</th><th class="num sortable" data-sort="matches">Matches</th>
+              <th class="num sortable" data-sort="nowPti">Now PTI</th>
               <th class="num sortable" data-sort="startPti">Start PTI</th><th class="num sortable" data-sort="startSigma">Start sigma</th>
-              <th class="num sortable" data-sort="nowPti">Now PTI</th><th class="num sortable" data-sort="change">Change</th><th class="num sortable" data-sort="nowSigma">Now sigma</th>
+              <th class="num sortable" data-sort="change">Change</th><th class="num sortable" data-sort="nowSigma">Now sigma</th>
               <th class="num sortable" data-sort="deltaOrig" title="Now PTI minus the PTI in the history as loaded (see Show original)">Δ Original</th>
             </tr></thead>
             <tbody id="playersBody"></tbody>
@@ -337,7 +338,7 @@
       </div>
       <div class="max-h-[32rem] overflow-auto">
         <table class="data">
-          <thead id="matchesHead"><tr><th title="Untick to leave a match out of the calculation">Use</th><th>#</th><th class="sortable" data-msort="date">Date</th><th>Team 1</th><th>Team 2</th><th>Score</th><th>Shown players: start → end PTI (sigma)</th></tr></thead>
+          <thead id="matchesHead"><tr><th title="Untick to leave a match out of the calculation">Use</th><th class="sortable" data-msort="date">Date</th><th>Team 1</th><th>Team 2</th><th>Score</th><th>Shown players: start → end PTI (sigma)</th></tr></thead>
           <tbody id="matchesBody"></tbody>
         </table>
       </div>
@@ -388,7 +389,7 @@
     groups: {},                   // linked ids: root player index -> member indexes (root first)
     matchDir: -1,                 // matches table date order: -1 newest first, 1 oldest first
     hiddenLines: new Set(),       // chart lines hidden from the legend: 'p:<id>' a player, 'o:<id>' an original
-    focusId: null                 // ?player= id: shown with their usual partners and opponents when data loads
+    focusId: null                 // ?player= id: the only player shown when data loads
   };
   var MAX_SHOWN = 8, MAX_TABLE_ROWS = 200, MAX_MATCH_ROWS = 300;
   // Categorical palette (fixed order), light and dark steps
@@ -910,7 +911,7 @@
   }
 
   // ---------- Players shown when data loads ----------
-  // ?player=id: that player and the 4 people they played with or against most.
+  // ?player=id: just that player.
   // Otherwise the 5 most active players of the data's last 90 days.
   // Locked players are never picked for you.
   var RECENT_DAYS = 90;
@@ -921,18 +922,6 @@
     // An unlocked restricted player can be named by their real id too
     if (i === undefined) for (var j = 0; j < S.players.length; j++) if (S.players[j].realId === id) { i = j; break; }
     return i === undefined ? -1 : e.root[i];
-  }
-  function circleOf(f) {
-    var e = S.eng, met = new Map();
-    e.positions(f).forEach(function (pos) {
-      var k = pos >> 2;
-      for (var q = 0; q < 4; q++) {
-        var i = e.pl[4 * k + q];
-        if (i < 0 || i === f || S.players[i].locked) continue;
-        met.set(i, (met.get(i) || 0) + 1);
-      }
-    });
-    return Array.from(met.keys()).sort(function (a, b) { return met.get(b) - met.get(a) || e.count[b] - e.count[a] || a - b; }).slice(0, 4);
   }
   function mostActiveRecently(n) {
     var e = S.eng, last = -Infinity, k, recent = new Int32Array(e.np), out = [];
@@ -945,8 +934,8 @@
   function showDefault() {
     var f = focusPlayer();
     if (f >= 0) {
-      toggle(f, true); circleOf(f).forEach(function (i) { toggle(i, true); });
-      return ' Showing ' + nameOf(f) + ' and the players they played with or against most.';
+      toggle(f, true);
+      return '';
     }
     mostActiveRecently(5).forEach(function (i) { toggle(i, true); });
     return S.focusId ? ' Player ' + S.focusId + ' is not in this data; showing the most active players of the last ' + RECENT_DAYS + ' days.'
@@ -1030,9 +1019,9 @@
         '<td><input type="checkbox" class="show accent-indigo-600"' + (shown ? ' checked' : '') + (merged ? off : !shown && full ? ' disabled title="Up to 8 players at a time"' : '') + '></td>' +
         '<td>' + (shown ? '<span class="chip" style="background:' + colorOf(i) + '"></span> ' : '') + esc(p.name) + lockBadge(p) + (p.name !== p.id ? ' <span class="muted">' + esc(p.realId || p.id) + '</span>' : '') + tag + '</td>' +
         '<td class="num">' + num(e.count[i]) + '</td>' +
+        '<td class="num now-pti">' + (merged ? '–' : fmt(e.currentPti(i))) + '</td>' +
         '<td class="num"><input type="number" step="0.01" class="field field-sm start-pti" value="' + fmt(e.initPti[i]) + '"' + off + '></td>' +
         '<td class="num"><input type="number" step="0.01" min="0.01" class="field field-sm start-sigma" value="' + fmt(e.initSigma[i]) + '"' + off + '></td>' +
-        '<td class="num now-pti">' + (merged ? '–' : fmt(e.currentPti(i))) + '</td>' +
         '<td class="num now-ch ' + (merged ? '' : ch > 0.005 ? 'up' : ch < -0.005 ? 'down' : '') + '">' + (merged ? '–' : (ch >= 0 ? '+' : '') + fmt(ch)) + '</td>' +
         '<td class="num now-sigma">' + (merged ? '–' : fmt(e.currentSigma(i))) + '</td>' + deltaCell(i, merged) + '</tr>';
     }).join('') + (matched > rows.length
@@ -1150,7 +1139,7 @@
       }).join('');
       return '<tr data-k="' + k + '"' + (ex || clash ? ' class="excluded"' : '') + '>' +
         '<td class="use"><input type="checkbox" class="use-chk" aria-label="Use match #' + num(k + 1) + ' in the calculation"' + (ex ? '' : ' checked') + (clash && !ex ? ' disabled' : '') + '></td>' +
-        '<td class="muted">' + num(k + 1) + '</td><td class="whitespace-nowrap">' + esc(e.dates[k]) + '</td>' +
+        '<td class="whitespace-nowrap">' + esc(e.dates[k]) + '</td>' +
         '<td class="teams">' + matchName(e.origPl[b]) + ' & ' + matchName(e.origPl[b + 1]) + '</td><td class="teams">' + matchName(e.origPl[b + 2]) + ' & ' + matchName(e.origPl[b + 3]) + '</td>' +
         '<td class="whitespace-nowrap score">' + esc(e.scores[k]) + '</td><td>' + cells + '</td></tr>';
     }).join('');
