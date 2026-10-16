@@ -126,6 +126,10 @@ class Share:
         return ('aws s3 cp {o}/{d} s3://{b}/{d} --recursive --acl public-read --content-type application/octet-stream '
                 '--cache-control "no-cache" --endpoint-url "$LINODE_S3_ENDPOINT"').format(o=self.out, d=DIR, b=BUCKET)
 
+    def sync_cmd(self):
+        here = os.path.dirname(sys.argv[0]) or '.'
+        return 'python3 {} --keys-only --keys-from {} --secret {}'.format(os.path.join(here, 'pti_share_sync.py'), self.out, self.secret)
+
     def rm_cmd(self, files):
         return '\n'.join('aws s3 rm s3://{b}/{d}/{f} --endpoint-url "$LINODE_S3_ENDPOINT"'.format(b=BUCKET, d=DIR, f=f) for f in files)
 
@@ -183,7 +187,7 @@ def main():
         sh.write(file, seal(key, js_json({'v': 1, 'key': s['dataKey'], 'm': s['manifest']})))
         s['passwords'].append({'label': label, 'file': file, 'added': now()})
         sh.save(s)
-        print('Password for "{}": {}\n\nUpload:\n{}'.format(label, pw, sh.upload_cmd()))
+        print('Password for "{}": {}\n\nUpload:\n{}\n\nor, without the AWS CLI:\n{}'.format(label, pw, sh.upload_cmd(), sh.sync_cmd()))
 
     elif a.cmd == 'remove-password':
         s = sh.load()
@@ -201,7 +205,7 @@ def main():
             os.unlink(os.path.join(a.out, DIR, file))
         except OSError:
             pass
-        print('Removed. Delete its key file from the bucket:\n' + sh.rm_cmd([file]))
+        print('Removed. Delete its key file from the bucket:\n{}\n\nor, without the AWS CLI:\n{} --prune'.format(sh.rm_cmd([file]), sh.sync_cmd()))
 
     elif a.cmd == 'list':
         s = sh.load()
