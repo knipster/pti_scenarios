@@ -147,12 +147,16 @@ LEAGUES = '''
   WHERE p IS NOT NULL GROUP BY 1
 '''
 # Player groups: one row per player and league they played in (whole table, like the pools).
+# The league's name is PSName in the leagues table (PSLeagueID is the id in matches_unified.LeagueID).
 # Other group types (club, team, city, region) would be more UNION ALL branches with a different type.
 GROUPS = '''
-  SELECT decode(p) AS player, 'league' AS type, coalesce(decode(LeagueID), '') AS "group", {label} AS label
-  FROM "apta2"."main"."matches_unified", UNNEST([Player1HID, Player2HID, Player1AID, Player2AID]) AS t(p)
-  WHERE p IS NOT NULL AND coalesce(decode(LeagueID), '') <> ''
-  GROUP BY ALL
+  WITH pl AS (
+    SELECT DISTINCT decode(p) AS player, decode(LeagueID) AS lg
+    FROM "apta2"."main"."matches_unified", UNNEST([Player1HID, Player2HID, Player1AID, Player2AID]) AS t(p)
+    WHERE p IS NOT NULL AND coalesce(decode(LeagueID), '') <> ''
+  )
+  SELECT pl.player, 'league' AS type, pl.lg AS "group", coalesce(nullif(l.PSName, ''), pl.lg) AS label
+  FROM pl LEFT JOIN (SELECT DISTINCT ON (PSLeagueID) * FROM "apta2"."main"."leagues") AS l ON l.PSLeagueID = pl.lg
   ORDER BY "group", player
 '''
 NAMES = '''
@@ -169,12 +173,8 @@ def export(a, tmp, pools):
     con = duckdb.connect(a.database, read_only=not a.database.startswith('md:'))
     out = {}
     if not a.no_groups:
-        cols = {c.lower(): c for (c,) in con.sql("SELECT column_name FROM duckdb_columns() WHERE table_name = 'matches_unified'").fetchall()}
-        # The league's display name, if the table has one; otherwise the label is its id
-        name_col = next((cols[c] for c in ('leaguename', 'league_name', 'league') if c in cols), None)
-        label = f'coalesce(nullif(decode("{name_col}"), \'\'), decode(LeagueID))' if name_col else 'decode(LeagueID)'
         path = os.path.join(tmp, 'groups.csv')
-        rel = con.sql(GROUPS.replace('{label}', label))
+        rel = con.sql(GROUPS)
         rel.write_csv(path, header=True)
         out['groups'] = (path, rel.shape[0])
     for name, tail in (('matches', MATCHES), ('ratings', RATINGS)):

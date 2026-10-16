@@ -111,9 +111,9 @@ player,type,group,label
 1001,club,ace,Ace Racquet Club
 ```
 
-- `pti_share_sync.py` builds it from MotherDuck with one row per player and league they played in, over the whole table (not just the exported dates). The label is the table's `LeagueName` column if it has one, otherwise the league id. Pass `--no-groups` to leave it out.
+- `pti_share_sync.py` builds it from MotherDuck with one row per player and league they played in, over the whole table (not just the exported dates). The label is the league's `PSName` from the `leagues` table (joined on `PSLeagueID`), or the league id if it has none. Pass `--no-groups` to leave it out.
 - `pti_share.py` and `pti-share.mjs` take `--groups groups.csv` on `init` and `update`.
-- To keep it small, `pti_share_sync.py` writes each group's label on its first row only (the explorer takes it from whichever row has one) and lists rows sorted by group, which compresses well. A whole-table export of about 120,000 player-league rows is roughly 2.5 MB of CSV and 0.5 MB once gzipped and encrypted.
+- To keep it small, `pti_share_sync.py` writes each group's label on its first row only (the explorer takes it from whichever row has one) and lists rows sorted by group, which compresses well. The whole table gives about 110,000 player-league rows (87,000 players in 90 leagues): roughly 2 MB of CSV, and about half a megabyte once gzipped and encrypted.
 - The file is encrypted and listed in the manifest like the other two. Old shared data without it still opens; the filter button just doesn't appear.
 - Players in a restricted pool (below) get no group rows, so a placeholder is never tied to a league beyond what the pool says.
 
