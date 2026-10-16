@@ -61,7 +61,10 @@ id,name,pti,sigma,lastPlayed
 ```csv
 date,player1id,player2id,player3id,player4id,score
 2025-09-06,1001,1002,1003,1004,"6-3, 4-6, 1-0"
+2025-09-13,1001,1003,1002,1004,"6-6(7-5), 3-6, 1-0(10-8)"
 ```
+
+Shared data opened with a password holds only matches whose result counts for ratings, so matches that APTA doesn't rate are already left out.
 
 ## The chart
 
