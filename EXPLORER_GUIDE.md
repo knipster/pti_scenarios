@@ -56,7 +56,7 @@ date,player1id,player2id,player3id,player4id,score
 
 The chart draws one line per shown player: a starting point (●) and then their rating after each match. When data loads, the five players with the most matches are shown. You can show up to 8 at a time from the Players table.
 
-Hover any point to see the player, the match date and their PTI and sigma. When Show original is on, the tooltip also shows the original values.
+Click a name in the legend above the chart to hide or show that line. Hover any point to see the player, the match date and their PTI and sigma. When Show original is on, the tooltip also shows the original values.
 
 ### Chart controls
 
@@ -147,7 +147,7 @@ A match where two linked ids of the same player meet is marked "Not rated: linke
 
 ## Sharing a view
 
-Click **Share** in the header to copy a link to what you're looking at. The link holds the shown players, linked ids, starting rating and sigma changes, breaks, excluded matches and the chart options. It doesn't hold the data itself; if the page was opened with `?ratings=` and `?matches=` URLs, those stay in the link.
+Click **Share** in the header to copy a link to what you're looking at. The link holds the shown players and which of their lines are hidden, linked ids, starting rating and sigma changes, breaks, excluded matches, the chart options, how the Players and Matches tables are sorted, and the text in both search boxes. It doesn't hold the data itself; if the page was opened with `?ratings=` and `?matches=` URLs, those stay in the link.
 
 When someone opens the link, the page waits until they load a data set, then applies the view to it. Anything the data doesn't have, such as a player id or a match that isn't in it, is skipped, and the status line says how many items were skipped. Matches are found by their date and four player ids, so a link still works on a later export of the same data.
 
