@@ -843,10 +843,47 @@
       (e.origPl[pos] !== e.pl[pos] ? ' (as ' + nameOf(e.origPl[pos]) + ')' : '')] : []);
   }
 
+  // Start spread: labels the lowest and highest starting PTI and the lowest and
+  // highest PTI after the last match, across the player's own line and the spread lines
+  var spreadLabels = {
+    id: 'spreadLabels',
+    afterDatasetsDraw: function (c) {
+      var run = spreadCache;
+      if (!run || !run.lines.length || S.metric !== 'Pti' || spreadPlayer() !== run.i) return;
+      var id = S.eng.ids[run.i], pts = [];
+      c.data.datasets.forEach(function (d, j) {
+        if (d.hidden || !(d.key === 'p:' + id || d.key.indexOf('s:' + id + ':') === 0)) return;
+        var els = c.getDatasetMeta(j).data, n = d.data.length;
+        if (n) pts.push({ s: els[0], sy: d.data[0].y, e: els[n - 1], ey: d.data[n - 1].y });
+      });
+      if (pts.length < 2) return;
+      function pick(k, _, low) { return pts.reduce(function (a, b) { return (low ? b[k] < a[k] : b[k] > a[k]) ? b : a; }); }
+      var tc = themeColors(), ctx = c.ctx, area = c.chartArea;
+      ctx.save();
+      ctx.font = '600 11px Inter, sans-serif'; ctx.textBaseline = 'middle';
+      function label(el, text, left, y) {
+        var w = ctx.measureText(text).width + 8, x = left ? el.x - 10 - w : el.x + 10;
+        x = Math.max(area.left, Math.min(area.right - w, x));
+        y = Math.max(area.top + 8, Math.min(area.bottom - 8, y));
+        ctx.globalAlpha = 0.85; ctx.fillStyle = tc.surface; ctx.fillRect(x, y - 8, w, 16);
+        ctx.globalAlpha = 1; ctx.fillStyle = tc.text; ctx.textAlign = 'left'; ctx.fillText(text, x + 4, y);
+      }
+      // A pair of labels closer than one label's height is pushed apart so both stay readable
+      function pair(k, el, names, left, d) {
+        var lo = pick(k, null, true), hi = pick(k, null, false), yl = lo[el].y, yh = hi[el].y;
+        if (Math.abs(yl - yh) < 17) { var mid = (yl + yh) / 2, dir = yl >= yh ? 1 : -1; yl = mid + dir * 8.5; yh = mid - dir * 8.5; }
+        label(hi[el], names[1] + fmt(hi[k], d), left, yh); label(lo[el], names[0] + fmt(lo[k], d), left, yl);
+      }
+      pair('sy', 's', ['Min start ', 'Max start '], false, 1);
+      pair('ey', 'e', ['Min end ', 'Max end '], true, 2);
+      ctx.restore();
+    }
+  };
+
   function makeChart() {
     var tc = themeColors();
     chart = new Chart($('chart'), {
-      type: 'line',
+      type: 'line', plugins: [spreadLabels],
       data: { datasets: buildDatasets() },
       options: {
         animation: false, responsive: true, maintainAspectRatio: false, parsing: false, normalized: true,
