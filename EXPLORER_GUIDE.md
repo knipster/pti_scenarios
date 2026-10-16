@@ -104,7 +104,7 @@ A break on an excluded match stays in the list but does nothing until the match 
 
 The Players table lists every player, with their starting and current ratings. Tick **Show** to put a player on the chart (up to 8). **Clear shown** takes everyone off the chart.
 
-Type in **Search players** to find players by name or id. Click a column header to sort by it, and click again to reverse the order. The table lists up to 200 rows at a time, so search or sort to reach the rest.
+Type in **Search players** to find players by name or id, and click or tap its × to clear it. Click a column header to sort by it, and click again to reverse the order. The table lists up to 200 rows at a time, so search or sort to reach the rest.
 
 | Column | Meaning |
 | --- | --- |
@@ -137,7 +137,7 @@ Click the **Date** header to switch between oldest and newest first. The table l
 
 ### Finding partners and opponents
 
-Type a name or id in **Filter by player** to list only the matches where that player took part, as a partner or an opponent. The count changes to "X of Y matches". The filter only narrows the list and doesn't change any ratings.
+Type a name or id in **Filter by player** to list only the matches where that player took part, as a partner or an opponent. The count changes to "X of Y matches". Click or tap the × in the box to show all matches again. The filter only narrows the list and doesn't change any ratings.
 
 ### Leaving matches out
 
