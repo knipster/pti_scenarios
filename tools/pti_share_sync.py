@@ -3,7 +3,8 @@
 
 Pulls the "PTI full export" ratings.csv and matches.csv from MotherDuck
 (apta2.main.matches_unified), encrypts them the same way as
-`tools/pti_share.py update` (or pti-share.mjs), and uploads them to the bucket's d/ folder.
+`tools/pti_share.py update` (or pti-share.mjs), and uploads them to the d/
+folder of the site folder named by --out (the bucket root by default).
 It reuses the data key in pti-share-secret.json, so every existing password
 keeps working, and only the two data files and the manifest change.
 
@@ -12,10 +13,20 @@ keeps working, and only the two data files and the manifest change.
     export AWS_ACCESS_KEY_ID=...  AWS_SECRET_ACCESS_KEY=...   # Linode Object Storage key
     export LINODE_S3_ENDPOINT=https://us-east-1.linodeobjects.com
     python3 tools/pti_share_sync.py --secret ~/pti-share/pti-share-secret.json
+    python3 tools/pti_share_sync.py --out staging --upload-keys   # a copy for /staging/, keys too
+    python3 tools/pti_share_sync.py --keys-only --prune           # after add- or remove-password
 
 Options:
     --secret FILE     pti-share secret (default pti-share-secret.json)
     --bucket NAME     default calc.platform.tennis
+    --out FOLDER      site folder in the bucket that holds pti_interactive.html;
+                      files go to FOLDER/d/ (default: the bucket root, so d/).
+                      s3://bucket/folder works too.
+    --upload-keys     also upload the password key files, from KEYS/d/
+    --keys-from KEYS  folder pti_share.py wrote to (its --out, default share-out)
+    --keys-only       just upload the key files; no export, data left as it is
+    --prune           delete files in FOLDER/d/ that the secret no longer lists,
+                      such as the key file of a removed password
     --from / --to     optional date range (YYYY-MM-DD, inclusive, US Eastern)
     --dry-run         query and encrypt, report sizes, upload nothing, change nothing
     --keep-csv DIR    also save the plain CSVs in DIR (keep them private)
@@ -29,6 +40,7 @@ import argparse
 import datetime as dt
 import gzip
 import json
+import re
 import os
 import secrets
 import sys
@@ -124,6 +136,11 @@ def seal(key, data):
     return iv + AESGCM(key).encrypt(iv, data, None)
 
 
+def unseal(key, blob):
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    return AESGCM(key).decrypt(blob[:12], blob[12:], None)
+
+
 def s3_client():
     import boto3
     endpoint = os.environ.get('LINODE_S3_ENDPOINT')
@@ -135,16 +152,60 @@ def s3_client():
     return boto3.client('s3', endpoint_url=endpoint, region_name=region)
 
 
+
+
+def missing(e):
+    code = getattr(e, 'response', {}).get('Error', {}).get('Code', '')
+    return code in ('NoSuchKey', '404', 'NotFound')
+
+
+def deployed(s3, bucket, folder, s, key):
+    """The data files the manifest in folder/ points to now: None if there is no
+    manifest there, False if it wasn't made with this secret's data key."""
+    try:
+        blob = s3.get_object(Bucket=bucket, Key=f'{folder}/{s["manifest"]}')['Body'].read()
+    except Exception as e:
+        if missing(e):
+            return None
+        fail(f'could not read s3://{bucket}/{folder}/ ({e})')
+    try:
+        m = json.loads(unseal(key, blob))
+        return [m['ratings'], m['matches']]
+    except Exception:
+        return False
+
+
+def listed(s3, bucket, folder):
+    names = []
+    for page in s3.get_paginator('list_objects_v2').paginate(Bucket=bucket, Prefix=folder + '/'):
+        names += [o['Key'][len(folder) + 1:] for o in page.get('Contents', [])]
+    return [n for n in names if n and '/' not in n]
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     p.add_argument('--secret', default='pti-share-secret.json')
     p.add_argument('--bucket', default='calc.platform.tennis')
+    p.add_argument('--out', default='')
+    p.add_argument('--upload-keys', action='store_true')
+    p.add_argument('--keys-from', default='share-out')
+    p.add_argument('--keys-only', action='store_true')
+    p.add_argument('--prune', action='store_true')
     p.add_argument('--from', dest='date_from')
     p.add_argument('--to', dest='date_to')
     p.add_argument('--dry-run', action='store_true')
     p.add_argument('--keep-csv')
     p.add_argument('--database', default='md:')
     a = p.parse_args()
+
+    out = a.out.strip()
+    if out.startswith('s3://'):
+        a.bucket, _, out = out[5:].partition('/')
+    out = out.strip('/')
+    if '..' in out.split('/') or not re.fullmatch(r'[A-Za-z0-9._/-]*', out):
+        fail('--out must be a folder in the bucket, such as staging')
+    folder = f'{out}/{DIR}' if out else DIR
+    where = f's3://{a.bucket}/{folder}/'
 
     if not os.path.exists(a.secret):
         fail(a.secret + ' not found (pass --secret). Run `python3 tools/pti_share.py init` once first.')
@@ -153,62 +214,109 @@ def main():
     key = b64decode(s['dataKey'])
     if len(key) != 32 or not s.get('manifest'):
         fail(a.secret + " doesn't look like a pti-share secret file")
-    s3 = None if a.dry_run else s3_client()
 
-    with tempfile.TemporaryDirectory() as tmp:
-        print('Exporting from ' + ('MotherDuck' if a.database.startswith('md:') else a.database) + ' ...', flush=True)
-        csvs = export(a, tmp)
-        nm, nr = csvs['matches'][1], csvs['ratings'][1]
-        print(f'  matches.csv: {nm:,} matches\n  ratings.csv: {nr:,} players')
-        if not nm or not nr:
-            fail('the export is empty; nothing uploaded')
-        if a.keep_csv:
-            os.makedirs(a.keep_csv, exist_ok=True)
+    # Key files can't be remade without the passwords, so they come from the folder pti_share.py wrote
+    keys = {}
+    if a.upload_keys or a.keys_only:
+        lost = []
+        for x in s.get('passwords', []):
+            path = os.path.join(a.keys_from, DIR, x['file'])
+            if os.path.exists(path):
+                with open(path, 'rb') as fh:
+                    keys[x['file']] = fh.read()
+            else:
+                lost.append(x['label'])
+        if lost:
+            fail(f'no key file in {os.path.join(a.keys_from, DIR)} for: {", ".join(lost)}. '
+                 'Pass --keys-from with the --out folder pti_share.py used.')
+        if not keys:
+            fail('the secret has no passwords yet. Run `python3 tools/pti_share.py add-password` first.')
+    s3 = None if a.dry_run and not a.prune else s3_client()
+
+    # What the folder serves now: its data files, and whether --prune is safe there
+    now = deployed(s3, a.bucket, folder, s, key) if s3 else None
+    if now is False:
+        fail(f'the manifest in {where} was not made with {a.secret}. Nothing changed.')
+    if a.prune and now is None and listed(s3, a.bucket, folder):
+        fail(f'{where} has files but no manifest from {a.secret}, so --prune would not know what to keep. Nothing changed.')
+
+    blobs, names = {}, {}
+    if not a.keys_only:
+        with tempfile.TemporaryDirectory() as tmp:
+            print('Exporting from ' + ('MotherDuck' if a.database.startswith('md:') else a.database) + ' ...', flush=True)
+            csvs = export(a, tmp)
+            nm, nr = csvs['matches'][1], csvs['ratings'][1]
+            print(f'  matches.csv: {nm:,} matches\n  ratings.csv: {nr:,} players')
+            if not nm or not nr:
+                fail('the export is empty; nothing uploaded')
+            if a.keep_csv:
+                os.makedirs(a.keep_csv, exist_ok=True)
+                for name, (path, _) in csvs.items():
+                    with open(path, 'rb') as src, open(os.path.join(a.keep_csv, name + '.csv'), 'wb') as dst:
+                        dst.write(src.read())
+
+            names = {'ratings': secrets.token_hex(16), 'matches': secrets.token_hex(16)}
             for name, (path, _) in csvs.items():
-                with open(path, 'rb') as src, open(os.path.join(a.keep_csv, name + '.csv'), 'wb') as dst:
-                    dst.write(src.read())
+                with open(path, 'rb') as fh:
+                    raw = fh.read()
+                blobs[names[name]] = seal(key, gzip.compress(raw, compresslevel=9, mtime=0))
+                print(f'  encrypted {name}.csv: {len(raw):,} bytes -> {len(blobs[names[name]]):,}')
+            manifest = {'v': 1, 'ratings': names['ratings'], 'matches': names['matches'],
+                        'updated': dt.datetime.now(dt.timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z')}
+            blobs[s['manifest']] = seal(key, json.dumps(manifest, separators=(',', ':')).encode())
+    elif now is None:
+        print(f'Note: {where} has no data yet. Run without --keys-only to upload it.')
+    if keys:
+        print(f'  {len(keys)} key file(s) from {os.path.join(a.keys_from, DIR)}')
 
-        names = {'ratings': secrets.token_hex(16), 'matches': secrets.token_hex(16)}
-        blobs = {}
-        for name, (path, _) in csvs.items():
-            with open(path, 'rb') as fh:
-                raw = fh.read()
-            blobs[names[name]] = seal(key, gzip.compress(raw, compresslevel=9, mtime=0))
-            print(f'  encrypted {name}.csv: {len(raw):,} bytes -> {len(blobs[names[name]]):,}')
-        manifest = {'v': 1, 'ratings': names['ratings'], 'matches': names['matches'],
-                    'updated': dt.datetime.now(dt.timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z')}
-        blobs[s['manifest']] = seal(key, json.dumps(manifest, separators=(',', ':')).encode())
+    # Files the folder should hold afterwards; --prune deletes the rest
+    data = [names['ratings'], names['matches']] if names else (now or [])
+    keep = set(data) | {s['manifest']} | {x['file'] for x in s.get('passwords', [])}
+    stale = [f for f in listed(s3, a.bucket, folder) if f not in keep] if a.prune else []
 
     if a.dry_run:
-        print('\nDry run: nothing uploaded, secret file unchanged.')
+        if a.prune:
+            print(f'Would delete {len(stale)} file(s) from {where} that the secret no longer lists.')
+        print(f'\nDry run for {where}: nothing uploaded, secret file unchanged.')
         return
 
-    def put(name):
-        s3.put_object(Bucket=a.bucket, Key=f'{DIR}/{name}', Body=blobs[name], ACL='public-read',
+    def put(name, body):
+        s3.put_object(Bucket=a.bucket, Key=f'{folder}/{name}', Body=body, ACL='public-read',
                       ContentType='application/octet-stream', CacheControl='no-cache')
 
-    # Data files first, then the manifest that points to them, so readers never see a half update
+    # Data files first, then the manifest that points to them, so readers never see a half update.
+    # Key files go last: they only point to the manifest.
     try:
-        for name in (names['ratings'], names['matches'], s['manifest']):
-            put(name)
+        if names:
+            for name in (names['ratings'], names['matches'], s['manifest']):
+                put(name, blobs[name])
+        for name, body in keys.items():
+            put(name, body)
     except Exception as e:
-        fail(f'upload to s3://{a.bucket}/{DIR}/ failed ({e}). The shared data and the secret file are unchanged.')
-    print(f'\nUploaded to s3://{a.bucket}/{DIR}/ (new data files and manifest).')
+        fail(f'upload to {where} failed ({e}). The secret file is unchanged.')
+    print(f'\nUploaded to {where}: ' + ', '.join(
+        (['new data files and manifest'] if names else []) + ([f'{len(keys)} key file(s)'] if keys else [])) + '.')
 
-    old = [f for f in (s.get('ratings'), s.get('matches')) if f]
-    s['ratings'], s['matches'] = names['ratings'], names['matches']
-    tmp_secret = a.secret + '.tmp'
-    with open(os.open(tmp_secret, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), 'w') as fh:
-        json.dump(s, fh, indent=2)
-        fh.write('\n')
-    os.replace(tmp_secret, a.secret)
+    old = []
+    if names:
+        # Old data files: the ones this folder served, or the secret's last ones if it had none
+        old = [f for f in (now or [s.get('ratings'), s.get('matches')]) if f and f not in keep]
+        s['ratings'], s['matches'] = names['ratings'], names['matches']
+        tmp_secret = a.secret + '.tmp'
+        with open(os.open(tmp_secret, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), 'w') as fh:
+            json.dump(s, fh, indent=2)
+            fh.write('\n')
+        os.replace(tmp_secret, a.secret)
 
-    for f in old:
+    gone = 0
+    for f in sorted(set(old) | set(stale)):
         try:
-            s3.delete_object(Bucket=a.bucket, Key=f'{DIR}/{f}')
-        except Exception as e:  # the new data is live either way
-            print(f'  could not delete old file {DIR}/{f}: {e}', file=sys.stderr)
-    print(f'Removed {len(old)} old data file(s). Existing passwords keep working.')
+            s3.delete_object(Bucket=a.bucket, Key=f'{folder}/{f}')
+            gone += 1
+        except Exception as e:  # the new files are live either way
+            print(f'  could not delete {folder}/{f}: {e}', file=sys.stderr)
+    if names or gone:
+        print(f'Removed {gone} old file(s) from {where}.' + (' Existing passwords keep working.' if names else ''))
 
 
 if __name__ == '__main__':
