@@ -111,10 +111,11 @@
       #dataPanel.collapsed { display: none; }
       #dataPanel:not(.collapsed) + #dataScrim { display: block; position: fixed; inset: 0; z-index: 55; background: rgba(2,6,23,.5); }
     }
-    #shareDlg { border-radius: 1rem; padding: 0; max-width: 22rem; width: calc(100% - 2rem); color: inherit; }
-    html.dark #shareDlg { background: #111827; border: 1px solid #1f2937; }
-    html:not(.dark) #shareDlg { background: #ffffff; border: 1px solid #e2e8f0; }
-    #shareDlg::backdrop { background: rgba(2,6,23,.55); }
+    #shareDlg, #groupsDlg { border-radius: 1rem; padding: 0; max-width: 22rem; width: calc(100% - 2rem); color: inherit; }
+    #groupsDlg { max-width: 28rem; }
+    html.dark #shareDlg, html.dark #groupsDlg { background: #111827; border: 1px solid #1f2937; }
+    html:not(.dark) #shareDlg, html:not(.dark) #groupsDlg { background: #ffffff; border: 1px solid #e2e8f0; }
+    #shareDlg::backdrop, #groupsDlg::backdrop { background: rgba(2,6,23,.55); }
 
     .seg { display: inline-flex; border-radius: .5rem; overflow: hidden; border: 1px solid; }
     html.dark .seg { border-color: #374151; }
@@ -148,6 +149,8 @@
     tr.excluded td { opacity: .55; }
     tr.merged td { opacity: .6; }
     .badge { display: inline-block; font-size: .6875rem; font-weight: 600; padding: 0 .4rem; border-radius: 9999px; background: rgba(99,102,241,.12); color: #6366f1; white-space: nowrap; }
+    .group-x { margin-left: .15rem; font-weight: 700; opacity: .7; }
+    .group-x:hover { opacity: 1; }
     html.dark .badge { background: rgba(129,140,248,.18); color: #a5b4fc; }
     .pool-chip { display: inline-block; font-size: .6875rem; font-weight: 500; padding: .05rem .45rem; border-radius: 9999px; white-space: nowrap; border: 1px solid; cursor: default; }
     .pool-chip.open { background: rgba(16,185,129,.12); color: #047857; border-color: rgba(16,185,129,.35); }
@@ -258,6 +261,7 @@
         <div id="formatHelp" class="hidden glass-card rounded-xl p-4 text-xs leading-relaxed">
           <p class="mb-2"><b>Starting ratings</b>: one row per player. Columns <code>id, pti, sigma</code>; optional <code>name</code> and <code>lastPlayed</code> (date of their match before the history starts, for break days). If the sigma is an official "Start Sigma" it already includes time decay, so leave <code>lastPlayed</code> empty.</p>
           <p class="mb-2"><b>Matches</b>: one row per match, oldest first. Columns <code>date, player1id, player2id, player3id, player4id, score</code>. Players 1 and 2 are a team; the score is from their side, sets separated by commas (quote it), e.g. <code>"6-3, 4-6, 1-0"</code>. Tiebreak points go in brackets, e.g. <code>6-6(7-5)</code> or <code>1-0(10-8)</code>; unfinished sets like <code>5-4</code> don't count, as in APTA's ratings. Dates as <code>YYYY-MM-DD</code> or <code>M/D/YYYY</code>.</p>
+          <p class="mb-2"><b>Player groups</b> (optional): one row per player and group they belong to. Columns <code>player, group</code>; optional <code>type</code> (<code>league</code>, <code>club</code>, <code>team</code>, <code>city</code>, <code>region</code>; default <code>league</code>) and <code>label</code> (the group's name). The filter (funnel) button in the Players panel then limits the list to players in the groups you pick.</p>
           <p>Files can be dropped on the boxes below, chosen from disk, or loaded from URLs. URLs can also go in this page's address: <code>pti_interactive.html?ratings=ratings.csv&amp;matches=matches.csv</code>. URLs on another site need that site to allow cross-origin requests.</p>
         </div>
 
@@ -280,6 +284,15 @@
             </label>
             <input id="matchesUrl" class="field" type="url" placeholder="…or a URL, e.g. data/matches.csv">
           </div>
+        </div>
+        <div class="glass-card rounded-2xl p-4 border-t-2 border-t-teal-500 space-y-3">
+          <div class="label muted">Player groups CSV <span class="normal-case">(optional)</span></div>
+          <label id="groupsDrop" class="dropzone block">
+            <input id="groupsFile" type="file" accept=".csv,text/csv,text/plain" class="hidden">
+            <div class="text-sm font-medium">Drop a file or click to choose</div>
+            <div id="groupsInfo" class="text-xs muted mt-1">player, group [, type, label]</div>
+          </label>
+          <input id="groupsUrl" class="field" type="url" placeholder="…or a URL, e.g. data/groups.csv">
         </div>
         <div class="flex items-center gap-3 flex-wrap">
           <button id="loadUrlsBtn" type="button" class="btn btn-primary">Load URLs</button>
@@ -344,9 +357,11 @@
             <div class="seg" id="panelSeg" title="Players: every player. Partners or Opponents: who the player in focus played with or against, and what those matches did to their PTI."><button data-v="players" class="on">Players</button><button data-v="partners">Partners</button><button data-v="opponents">Opponents</button></div>
             <label id="focusWrap" class="text-xs muted flex items-center gap-1" style="display:none">of <select id="focusSel" class="field" style="width:auto" aria-label="Player in focus"></select></label>
             <span id="selCount" class="text-xs muted"></span>
+            <span id="groupChips" class="flex items-center gap-1 flex-wrap"></span>
           </div>
           <div class="flex items-center gap-2">
             <span class="search-wrap"><input id="playerSearch" type="search" class="field" placeholder="Search players" aria-label="Search players"><button type="button" class="search-clear" aria-label="Clear search" title="Clear">×</button></span>
+            <button id="groupsBtn" type="button" class="btn" style="display:none" title="Filter by Groups" aria-label="Filter by Groups" aria-haspopup="dialog"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:inline-block;vertical-align:-3px"><path d="M3 4h18l-7 8.5V19l-4 2v-8.5z"/></svg><span id="groupsBtnN"></span></button>
             <button id="linkShownBtn" type="button" class="btn" title="Link the shown players into one group (or add them to the one group already shown)">Link shown</button>
             <button id="clearShownBtn" type="button" class="btn" title="Hide every player from the chart">Clear shown</button>
           </div>
@@ -419,6 +434,26 @@
   </main>
   </div>
 
+  <!-- Opened with the Groups button in the Players panel -->
+  <dialog id="groupsDlg" aria-labelledby="groupsTitle">
+    <div class="p-5 space-y-3">
+      <div class="flex items-center justify-between">
+        <span id="groupsTitle" class="text-sm font-semibold">Limit players to a group</span>
+        <button type="button" id="groupsClose" class="muted text-lg leading-none" aria-label="Close">×</button>
+      </div>
+      <div class="flex items-center gap-2">
+        <select id="groupsType" class="field" style="width:auto" aria-label="Group type"></select>
+        <input id="groupsSearch" type="search" class="field" placeholder="Find a group" aria-label="Find a group" autocomplete="off">
+      </div>
+      <div id="groupsList" class="max-h-72 overflow-auto text-sm" role="group" aria-label="Groups"></div>
+      <div class="flex items-center gap-3">
+        <button type="button" id="groupsClear" class="btn">Clear</button>
+        <button type="button" id="groupsDone" class="btn btn-primary">Done</button>
+        <span id="groupsMsg" class="text-xs muted" role="status"></span>
+      </div>
+    </div>
+  </dialog>
+
   <!-- Opened with the Password button in the Data column, Alt+Shift+P or a double-click on the version badge -->
   <dialog id="shareDlg" aria-labelledby="shareTitle">
     <form id="shareForm" method="dialog" class="p-5 space-y-3">
@@ -444,7 +479,11 @@
 
   // ---------- State ----------
   var S = {
-    ratingsText: null, matchesText: null,
+    ratingsText: null, matchesText: null, groupsText: null,  // groupsText is optional
+    pg: null,            // player groups: { rows, types, byKey: Map key -> {type, group, label, players:[idx]}, of: Map idx -> Set(key) }
+    pgFilter: new Set(), // keys of the player groups limiting the Players table (a player in any of them stays)
+    pgType: '',          // type shown in the Groups picker ('' = all)
+    pgSearch: '',
     players: [],         // [{ id, name, pti, sigma, lastPlayed }] as loaded; index = engine player index
     eng: null,           // PtiEngine
     xs: null,            // x position of each match for the current axis mode
@@ -615,6 +654,107 @@
     return cols;
   }
 
+  // ---------- Player groups ----------
+  // Optional CSV of memberships: player, group [, type, label]. A group is any set of players
+  // (a league, club, team, city or region); type says which kind, label is its display name.
+  var PG_TYPES = { league: 'League', club: 'Club', team: 'Team', city: 'City', region: 'Region' };
+  function pgTypeName(t) { return PG_TYPES[t] || t.charAt(0).toUpperCase() + t.slice(1); }
+  function readGroups(text) {
+    var p = parseCsv(text), pl = pickCol(p, ['player', 'playerid', 'id']), gr = pickCol(p, ['group', 'groupid']);
+    if (!pl || !gr) throw new Error('The groups CSV needs player and group columns.');
+    var ty = pickCol(p, ['type', 'grouptype']), lb = pickCol(p, ['label', 'groupname', 'name']);
+    var out = [];
+    for (var r = 0; r < p.rows; r++) {
+      if (!pl[r] || !gr[r]) continue;
+      out.push({ player: pl[r], type: ((ty && ty[r]) || 'league').toLowerCase(), group: gr[r], label: (lb && lb[r]) || '' });  // a group's label can be on just one of its rows
+    }
+    return out;
+  }
+  // Index the memberships by player (engine index) and by group. Rows for ids not in the ratings are ignored.
+  function buildGroups(text) {
+    S.pg = null;
+    if (text != null && S.players.length) {
+      var rows = readGroups(text), idx = new Map(), byKey = new Map(), of = new Map(), types = new Set();
+      S.players.forEach(function (p, i) { idx.set(p.id, i); });
+      rows.forEach(function (g) {
+        var i = idx.get(g.player); if (i == null) return;
+        var key = g.type + '\t' + g.group, e = byKey.get(key);
+        if (!e) { byKey.set(key, e = { key: key, type: g.type, group: g.group, label: '', players: [] }); types.add(g.type); }
+        if (g.label && !e.label) e.label = g.label;
+        e.players.push(i);
+        var set = of.get(i); if (!set) of.set(i, set = new Set());
+        set.add(key);
+      });
+      byKey.forEach(function (e) { if (!e.label) e.label = e.group; });
+      if (byKey.size) S.pg = { byKey: byKey, of: of, types: Array.from(types).sort() };
+    }
+    S.pgFilter = new Set();
+  }
+  function inGroupFilter(i) {
+    if (!S.pgFilter.size) return true;
+    var set = S.pg && S.pg.of.get(i);
+    if (!set) return false;
+    var hit = false;
+    S.pgFilter.forEach(function (k) { if (set.has(k)) hit = true; });
+    return hit;
+  }
+  function renderGroupChips() {
+    $('groupsBtn').style.display = S.pg ? '' : 'none';
+    $('groupsBtnN').textContent = S.pgFilter.size ? ' ' + S.pgFilter.size : '';
+    $('groupChips').innerHTML = !S.pg ? '' : Array.from(S.pgFilter).map(function (k) {
+      var g = S.pg.byKey.get(k);
+      return g ? '<span class="badge" title="' + esc(pgTypeName(g.type) + ': ' + g.label + ' (' + num(g.players.length) + ' players)') + '">' + esc(g.label) +
+        ' <button type="button" class="group-x" data-key="' + esc(k) + '" aria-label="Remove ' + esc(g.label) + '">×</button></span>' : '';
+    }).join('');
+  }
+  function renderGroupList() {
+    var g = S.pg, q = S.pgSearch.toLowerCase();
+    var sel = $('groupsType'); sel.style.display = g && g.types.length > 1 ? '' : 'none';
+    if (!g) { $('groupsList').innerHTML = ''; return; }
+    if (sel.options.length !== g.types.length + 1) {
+      sel.innerHTML = '<option value="">All types</option>' + g.types.map(function (t) { return '<option value="' + esc(t) + '">' + esc(pgTypeName(t)) + '</option>'; }).join('');
+    }
+    sel.value = S.pgType;
+    var list = Array.from(g.byKey.values()).filter(function (e) {
+      return (!S.pgType || e.type === S.pgType) && (!q || e.label.toLowerCase().indexOf(q) >= 0 || e.group.toLowerCase().indexOf(q) >= 0);
+    }).sort(function (a, b) { return b.players.length - a.players.length || (a.label < b.label ? -1 : 1); });
+    var shown = list.slice(0, 200), multi = g.types.length > 1 && !S.pgType;
+    $('groupsList').innerHTML = shown.map(function (e) {
+      return '<label class="flex items-center gap-2 py-1"><input type="checkbox" data-key="' + esc(e.key) + '"' + (S.pgFilter.has(e.key) ? ' checked' : '') + '>' +
+        '<span class="flex-1">' + esc(e.label) + (multi ? ' <span class="muted">' + esc(pgTypeName(e.type)) + '</span>' : '') + '</span>' +
+        '<span class="muted tabular-nums">' + num(e.players.length) + '</span></label>';
+    }).join('') + (list.length > shown.length ? '<div class="muted text-xs py-1">Showing ' + num(shown.length) + ' of ' + num(list.length) + ' groups. Search to find others.</div>' : '') +
+      (!list.length ? '<div class="muted text-xs py-1">No groups match.</div>' : '');
+    var n = 0; S.players.forEach(function (p, i) { if (inGroupFilter(i)) n++; });
+    $('groupsMsg').textContent = S.pgFilter.size ? num(n) + ' players in the selected groups' : '';
+  }
+  function setGroupFilter(keys) {
+    S.pgFilter = new Set(keys);
+    renderGroupChips(); renderGroupList(); renderPlayers();
+  }
+  function wireGroups() {
+    $('groupsBtn').addEventListener('click', function () {
+      var d = $('groupsDlg'); if (!S.pg || d.open) return;
+      renderGroupList();
+      if (d.showModal) d.showModal(); else d.setAttribute('open', '');
+      $('groupsSearch').focus();
+    });
+    $('groupsClose').addEventListener('click', function () { $('groupsDlg').close(); });
+    $('groupsDone').addEventListener('click', function () { $('groupsDlg').close(); });
+    $('groupsClear').addEventListener('click', function () { setGroupFilter([]); });
+    $('groupsType').addEventListener('change', function () { S.pgType = this.value; renderGroupList(); });
+    $('groupsSearch').addEventListener('input', function () { S.pgSearch = this.value; renderGroupList(); });
+    $('groupsList').addEventListener('change', function (e) {
+      var k = e.target.getAttribute('data-key'); if (k == null) return;
+      var keys = new Set(S.pgFilter); if (e.target.checked) keys.add(k); else keys.delete(k);
+      setGroupFilter(keys);
+    });
+    $('groupChips').addEventListener('click', function (e) {
+      var b = e.target.closest('.group-x'); if (!b) return;
+      var keys = new Set(S.pgFilter); keys.delete(b.getAttribute('data-key')); setGroupFilter(keys);
+    });
+  }
+
   // ---------- Loading ----------
   function tryBuild() {
     if (S.ratingsText == null || S.matchesText == null) return;
@@ -632,6 +772,8 @@
         S.orig = { pti: S.eng.endPti.slice(), sigma: S.eng.endSigma.slice(), init: S.eng.initPti.slice() };
         S.overrides = []; S.selected = []; S.slot = {}; S.sortOrder = null; S.xs = null; S.excluded = []; S.groups = {}; S.hiddenLines = new Set(); S.focus = null; S.spread.i = null;
         S.ratingsText = S.matchesText = null;  // free the raw text
+        S.pgFilter = new Set(); S.pgType = ''; S.pgSearch = '';
+        buildGroups(S.groupsText); S.groupsText = null;
         var locked = 0, unlocked = 0;
         S.players.forEach(function (p) { if (p.locked) locked++; else if (p.realId) unlocked++; });
         var pools = S.unlocked || []; S.reveal = S.unlocked = null;
@@ -641,6 +783,7 @@
         var unrated = 0; for (var k = 0; k < S.eng.n; k++) if (!S.eng.rated(k)) unrated++;
         setStatus(num(S.players.length) + ' players and ' + num(S.eng.n) + ' matches loaded in ' + secs(performance.now() - t0) +
           ' (reading ' + secs(t1 - t0) + ', indexing ' + secs(t2 - t1) + ', rating ' + secs(run.ms) + ')' +
+          (S.pg ? '. ' + num(S.pg.byKey.size) + ' player groups' : '') +
           (r.bad ? '. ' + num(r.bad) + ' rating rows skipped' : '') + (unrated ? '. ' + num(unrated) + ' matches could not be rated' : '') + '.' +
           (unlocked ? ' Real names shown for ' + num(unlocked) + ' restricted players (' + pools.join(', ') + ').' : '') +
           (locked ? ' ' + num(locked) + ' restricted players have placeholder names (🔒).' : '') + shownNote, false);
@@ -656,15 +799,25 @@
       } catch (e) { setStatus(e.message, true); }
     }, 30);
   }
+  // Groups are optional: with data already loaded they apply at once, otherwise they wait for it
+  function takeGroups(t) {
+    if (!S.eng) { S.groupsText = t; setStatus('Loaded the groups file; they apply when ratings and matches are loaded.'); return; }
+    try {
+      buildGroups(t);
+      renderGroupChips(); renderPlayers();
+      setStatus(S.pg ? num(S.pg.byKey.size) + ' player groups loaded.' : 'No groups matched the loaded players.', !S.pg);
+    } catch (e) { setStatus(e.message, true); }
+  }
   function wireDrop(kind) {
     var zone = $(kind + 'Drop'), input = $(kind + 'File');
     function take(file) {
       if (!file) return;
       setStatus('Reading ' + file.name + '…');
       file.text().then(function (t) {
-        if (kind === 'ratings') S.ratingsText = t; else S.matchesText = t;
         $(kind + 'Info').textContent = file.name + ' (' + (file.size / 1e6).toFixed(1) + ' MB)';
         zone.classList.add('loaded');
+        if (kind === 'groups') { takeGroups(t); return; }
+        if (kind === 'ratings') S.ratingsText = t; else S.matchesText = t;
         if (S.ratingsText == null || S.matchesText == null) setStatus('Loaded ' + file.name + '; add the other file.');
         tryBuild();
       });
@@ -677,10 +830,12 @@
   function fetchText(url) {
     return fetch(url).then(function (r) { if (!r.ok) throw new Error(url + ': HTTP ' + r.status); return r.text(); });
   }
-  function loadUrls(rUrl, mUrl) {
-    if (!rUrl && !mUrl) { setStatus('Enter at least one URL.', true); return; }
+  function loadUrls(rUrl, mUrl, gUrl) {
+    if (!rUrl && !mUrl && !gUrl) { setStatus('Enter at least one URL.', true); return; }
     setStatus('Downloading…');
-    Promise.all([rUrl ? fetchText(rUrl) : null, mUrl ? fetchText(mUrl) : null]).then(function (t) {
+    Promise.all([rUrl ? fetchText(rUrl) : null, mUrl ? fetchText(mUrl) : null, gUrl ? fetchText(gUrl) : null]).then(function (t) {
+      if (t[2] != null) { $('groupsInfo').textContent = gUrl; $('groupsDrop').classList.add('loaded'); S.groupsText = t[2]; }
+      if (t[0] == null && t[1] == null) { var g = S.groupsText; S.groupsText = null; takeGroups(g); return; }
       if (t[0] != null) { S.ratingsText = t[0]; $('ratingsInfo').textContent = rUrl; $('ratingsDrop').classList.add('loaded'); }
       if (t[1] != null) { S.matchesText = t[1]; $('matchesInfo').textContent = mUrl; $('matchesDrop').classList.add('loaded'); }
       if (S.ratingsText == null || S.matchesText == null) setStatus('Loaded one file; add the other.');
@@ -1216,6 +1371,7 @@
     var order = sortedPlayers(), rows = [], matched = 0;
     for (var j = 0; j < order.length; j++) {
       var p = S.players[order[j]];
+      if (S.pgFilter.size && !inGroupFilter(order[j])) continue;
       if (q && p.id.toLowerCase().indexOf(q) < 0 && p.name.toLowerCase().indexOf(q) < 0 && !(p.realId && p.realId.toLowerCase().indexOf(q) >= 0)) continue;
       matched++;
       if (rows.length < MAX_TABLE_ROWS) rows.push(order[j]);
@@ -1236,7 +1392,8 @@
         '<td class="num now-ch ' + (merged ? '' : ch > 0.005 ? 'up' : ch < -0.005 ? 'down' : '') + '">' + (merged ? '–' : (ch >= 0 ? '+' : '') + fmt(ch)) + '</td>' +
         '<td class="num now-sigma">' + (merged ? '–' : fmt(e.currentSigma(i))) + '</td>' + deltaCell(i, merged) + '</tr>';
     }).join('') + (matched > rows.length
-      ? '<tr><td colspan="8" class="muted text-center">Showing ' + num(rows.length) + ' of ' + num(matched) + ' players. Search or sort to find others.</td></tr>' : '');
+      ? '<tr><td colspan="8" class="muted text-center">Showing ' + num(rows.length) + ' of ' + num(matched) + ' players. Search or sort to find others.</td></tr>' : '') +
+      (!matched && S.pgFilter.size ? '<tr><td colspan="8" class="muted text-center">No players in the selected groups' + (q ? ' match the search' : '') + '.</td></tr>' : '');
     $('selCount').textContent = '(' + S.selected.length + ' of ' + MAX_SHOWN + ' shown)';
     $('clearShownBtn').disabled = !S.selected.length;
     $('linkShownBtn').disabled = S.selected.length < 2;
@@ -1735,7 +1892,7 @@
     });
   }
 
-  function renderAll() { renderAccuracy(); refreshChart(); renderSpreadControls(); renderPlayers(); renderRel(); renderBreaks(); renderLinks(); renderMatches(); }
+  function renderAll() { renderAccuracy(); refreshChart(); renderSpreadControls(); renderGroupChips(); renderPlayers(); renderRel(); renderBreaks(); renderLinks(); renderMatches(); }
 
   // ---------- Downloads ----------
   function csvCell(v) { v = v == null ? '' : typeof v === 'number' ? String(Math.round(v * 10000) / 10000) : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
@@ -1786,6 +1943,8 @@
   // ---------- Sample data (fictional players) ----------
   var SAMPLE_RATINGS = 'id,name,pti,sigma\nP01,Avery Hale,18,4.5\nP02,Blake Moreno,26.7,2.73\nP03,Casey Ruiz,39.9,3.53\nP04,Devon Park,27.9,4.08\nP05,Emery Shaw,40.7,3.56\nP06,Finley Cross,38.5,3.79\nP07,Harper Lane,42.5,2.81\nP08,Jordan Price,29.2,3.97\nP09,Kendall Ross,38.9,2.33\nP10,Logan Reyes,38.5,3.37\n';
   var SAMPLE_MATCHES = "date,player1id,player2id,player3id,player4id,score\n2025-04-06,P09,P06,P01,P03,\"4-6, 3-6\"\n2025-04-10,P01,P09,P02,P10,\"6-2, 0-6, 4-6\"\n2025-04-16,P04,P03,P09,P08,\"6-4, 6-2\"\n2025-04-18,P06,P03,P04,P02,\"6-7, 2-6\"\n2025-04-22,P05,P02,P09,P04,\"0-6, 0-6\"\n2025-04-26,P01,P02,P08,P07,\"6-4, 6-3\"\n2025-05-02,P07,P06,P05,P10,\"3-6, 6-1, 6-0\"\n2025-05-07,P09,P10,P06,P01,\"3-6, 2-6\"\n2025-05-13,P05,P01,P02,P03,\"6-0, 4-6, 6-7\"\n2025-05-15,P01,P02,P09,P08,\"6-1, 7-6\"\n2025-05-21,P05,P08,P04,P03,\"4-6, 3-6\"\n2025-05-26,P01,P05,P07,P04,\"2-6, 3-6\"\n2025-06-01,P10,P06,P04,P09,\"6-0, 0-6, 2-6\"\n2025-06-06,P10,P01,P02,P03,\"6-1, 6-3\"\n2025-06-07,P02,P08,P05,P07,\"6-1, 7-6\"\n2025-06-13,P01,P02,P03,P08,\"6-0, 6-4\"\n2025-06-19,P04,P08,P01,P02,\"3-6, 6-0, 6-0\"\n2025-06-23,P09,P06,P05,P08,\"3-6, 2-6\"\n2025-06-28,P02,P01,P03,P07,\"7-6, 6-3\"\n2025-07-02,P01,P02,P03,P04,\"6-1, 6-2\"\n2025-07-06,P06,P05,P01,P04,\"2-6, 0-6\"\n2025-07-07,P04,P09,P10,P01,\"4-6, 6-0, 3-6\"\n2025-07-08,P03,P08,P09,P02,\"6-0, 0-6, 1-6\"\n2025-07-12,P03,P07,P06,P08,\"6-2, 6-0\"\n2025-07-13,P03,P01,P05,P04,\"3-6, 1-6\"\n2025-07-19,P01,P06,P02,P03,\"4-6, 4-6\"\n2025-07-20,P10,P06,P07,P05,\"6-3, 4-6, 6-0\"\n2025-07-25,P08,P07,P10,P06,\"6-3, 2-6, 6-0\"\n2025-07-26,P06,P05,P04,P03,\"1-6, 2-6\"\n2025-07-30,P01,P02,P06,P09,\"6-2, 6-0\"\n2025-08-01,P08,P01,P09,P03,\"6-3, 6-4\"\n2025-08-06,P10,P04,P01,P08,\"2-6, 3-6\"\n2025-08-12,P04,P06,P08,P02,\"1-6, 2-6\"\n2025-08-17,P08,P01,P09,P04,\"6-0, 7-6\"\n2025-08-20,P01,P09,P02,P07,\"6-7, 3-6\"\n2025-08-25,P07,P01,P02,P03,\"0-6, 6-2, 6-0\"\n2025-08-28,P01,P06,P08,P07,\"6-3, 6-3\"\n2025-09-03,P04,P06,P01,P05,\"3-6, 3-6\"\n2025-09-04,P07,P10,P08,P01,\"4-6, 6-7\"\n2025-09-09,P06,P01,P02,P04,\"6-1, 2-6, 1-6\"\n2025-09-13,P01,P07,P08,P04,\"0-6, 4-6\"\n2025-09-16,P10,P05,P06,P07,\"3-6, 1-6\"\n2025-09-20,P01,P05,P08,P02,\"0-6, 6-7\"\n2025-09-21,P01,P08,P04,P07,\"6-3, 0-6, 6-0\"\n2025-09-24,P02,P01,P04,P05,\"6-1, 6-3\"\n2025-09-26,P10,P06,P09,P01,\"2-6, 6-1, 4-6\"\n2025-10-02,P05,P08,P07,P04,\"2-6, 0-6\"\n2025-10-06,P10,P08,P05,P01,\"1-6, 6-4, 2-6\"\n2025-10-10,P10,P02,P07,P04,\"4-6, 6-4, 2-6\"\n2025-10-12,P08,P02,P01,P07,\"6-0, 7-6\"\n2025-10-13,P06,P10,P04,P03,\"2-6, 3-6\"\n2025-10-15,P08,P05,P06,P04,\"6-0, 1-6, 6-3\"\n2025-10-21,P01,P02,P10,P03,\"6-1, 6-1\"\n2025-10-26,P07,P04,P09,P03,\"6-0, 6-1\"\n2025-10-31,P04,P01,P06,P07,\"6-1, 6-4\"\n2025-11-06,P05,P07,P01,P06,\"1-6, 1-6\"\n2025-11-10,P04,P07,P06,P01,\"6-7, 6-7\"\n2025-11-12,P02,P07,P01,P08,\"3-6, 2-6\"\n2025-11-18,P01,P08,P05,P07,\"6-4, 7-6\"\n2025-11-24,P01,P02,P06,P03,\"6-0, 7-6\"\n2025-11-25,P01,P06,P04,P05,\"6-7, 6-3, 6-2\"\n2025-12-01,P03,P02,P10,P01,\"7-6, 3-6, 3-6\"\n2025-12-02,P09,P04,P03,P06,\"2-6, 7-6, 6-3\"\n2025-12-08,P05,P07,P06,P01,\"0-6, 2-6\"\n2025-12-12,P07,P05,P04,P03,\"2-6, 2-6\"\n2025-12-18,P02,P03,P05,P04,\"6-1, 6-3\"\n2025-12-20,P01,P02,P06,P04,\"6-0, 7-6\"\n2025-12-25,P03,P01,P10,P09,\"6-0, 6-1\"\n2025-12-26,P06,P01,P07,P10,\"6-2, 6-4\"\n2025-12-29,P04,P03,P05,P02,\"3-6, 6-3, 3-6\"\n2025-12-30,P08,P06,P09,P07,\"6-1, 6-2\"\n2026-01-02,P04,P07,P08,P05,\"6-1, 6-0\"\n2026-01-03,P10,P02,P01,P06,\"2-6, 6-1, 4-6\"\n2026-01-05,P07,P01,P09,P02,\"4-6, 1-6\"\n2026-01-10,P08,P03,P02,P01,\"6-1, 3-6, 6-3\"\n2026-01-13,P03,P02,P10,P01,\"6-1, 7-6\"\n2026-01-15,P08,P03,P02,P05,\"6-3, 6-2\"\n2026-01-21,P05,P03,P10,P06,\"2-6, 6-2, 6-2\"\n2026-01-22,P08,P01,P09,P04,\"7-6, 6-2\"\n2026-01-25,P08,P09,P01,P04,\"2-6, 0-6\"\n2026-01-27,P04,P07,P01,P10,\"6-3, 6-1\"\n2026-01-31,P02,P04,P03,P06,\"6-1, 6-3\"\n2026-02-03,P02,P04,P08,P03,\"7-6, 6-2\"\n2026-02-04,P01,P09,P03,P10,\"6-3, 0-6, 0-6\"\n2026-02-09,P10,P01,P02,P09,\"6-4, 3-6, 3-6\"\n2026-02-10,P02,P01,P08,P03,\"6-1, 6-2\"\n2026-02-16,P01,P02,P03,P04,\"6-0, 6-4\"\n2026-02-18,P10,P01,P06,P02,\"6-4, 6-0\"\n2026-02-20,P08,P04,P01,P09,\"6-2, 6-2\"\n2026-02-21,P02,P07,P01,P10,\"6-0, 1-6, 6-2\"\n";
+
+  var SAMPLE_GROUPS = 'player,type,group,label\nP01,league,N,North League\nP02,league,N,\nP03,league,N,\nP04,league,N,\nP05,league,N,\nP06,league,S,South League\nP07,league,S,\nP08,league,S,\nP09,league,S,\nP10,league,S,\nP01,league,S,\nP02,club,ace,Ace Racquet Club\nP03,club,ace,\nP07,club,ace,\nP01,club,oak,Oakmont\nP04,club,oak,\nP09,club,bay,Bayside\nP10,club,bay,\n';
 
   // ---------- Shared data (password) ----------
   // Files made with tools/pti_share.py (or pti-share.mjs) live in SHARE.dir, which is
@@ -1855,7 +2014,8 @@
       return fetchBytes(k.m, 'The shared data is missing.').then(function (b) { return C.open(dataKey, b); });
     }).then(function (plain) {
       var m = JSON.parse(new TextDecoder().decode(plain));
-      var csvs = Promise.all([m.ratings, m.matches].map(function (n) {
+      var csvs = Promise.all([m.ratings, m.matches, m.groups].map(function (n) {
+        if (!n) return null;  // groups are optional
         return fetchBytes(n, 'The shared data is missing.').then(function (b) { return C.open(dataKey, b); }).then(gunzipText);
       }));
       // Real names of the restricted pools this password unlocks: { placeholder id: [real id, real name] }
@@ -1868,7 +2028,7 @@
         var reveal = {}, opened = [], count = {};
         r[1].forEach(function (l, j) { if (l) { opened.push(mine[j]); count[mine[j]] = Object.keys(l).length; for (var id in l) reveal[id] = l[id]; } });
         var info = Object.keys(m.pools || {}).map(function (n) { return { name: n, open: n in count, count: count[n] || 0 }; });
-        return [r[0][0], r[0][1], reveal, opened, info];
+        return [r[0][0], r[0][1], reveal, opened, info, r[0][2]];
       });
     });
   }
@@ -1903,7 +2063,7 @@
       $('shareGo').disabled = true; shareMsg('Checking…');
       openShared(pass).then(function (t) {
         $('shareDlg').close();
-        S.ratingsText = t[0]; S.matchesText = t[1]; S.reveal = t[2]; S.unlocked = t[3]; S.poolInfo = t[4];
+        S.ratingsText = t[0]; S.matchesText = t[1]; S.groupsText = t[5]; S.reveal = t[2]; S.unlocked = t[3]; S.poolInfo = t[4];
         tryBuild();
       }).catch(function (err) {
         shareMsg(err && /^[A-Z]/.test(err.message) ? err.message : WRONG, true);
@@ -1956,10 +2116,11 @@
   }
 
   function init() {
-    wireDrop('ratings'); wireDrop('matches'); wireShare(); wireHeader();
-    $('loadUrlsBtn').addEventListener('click', function () { loadUrls($('ratingsUrl').value.trim(), $('matchesUrl').value.trim()); });
+    wireDrop('ratings'); wireDrop('matches'); wireDrop('groups'); wireGroups(); wireShare(); wireHeader();
+    $('loadUrlsBtn').addEventListener('click', function () { loadUrls($('ratingsUrl').value.trim(), $('matchesUrl').value.trim(), $('groupsUrl').value.trim()); });
     $('sampleBtn').addEventListener('click', function () {
-      S.ratingsText = SAMPLE_RATINGS; S.matchesText = SAMPLE_MATCHES;
+      S.ratingsText = SAMPLE_RATINGS; S.matchesText = SAMPLE_MATCHES; S.groupsText = SAMPLE_GROUPS;
+      $('groupsInfo').textContent = 'Sample: 2 leagues, 3 clubs'; $('groupsDrop').classList.add('loaded');
       $('ratingsInfo').textContent = 'Sample: 10 fictional players'; $('matchesInfo').textContent = 'Sample: 90 matches';
       $('ratingsDrop').classList.add('loaded'); $('matchesDrop').classList.add('loaded');
       tryBuild();
@@ -2131,7 +2292,8 @@
     if (q.get('player')) S.focusId = q.get('player').trim();
     if (q.get('ratings')) $('ratingsUrl').value = q.get('ratings');
     if (q.get('matches')) $('matchesUrl').value = q.get('matches');
-    if (q.get('ratings') && q.get('matches')) loadUrls(q.get('ratings'), q.get('matches'));
+    if (q.get('groups')) $('groupsUrl').value = q.get('groups');
+    if (q.get('ratings') && q.get('matches')) loadUrls(q.get('ratings'), q.get('matches'), q.get('groups'));
     refreshChart();
   }
 

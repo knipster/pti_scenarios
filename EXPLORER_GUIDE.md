@@ -35,6 +35,12 @@ When shared data with restricted pools is open, the header shows a chip for each
 - In the Matches table and the Partners and Opponents lists, players in a locked pool show as **🔒 Restricted**, with no name and nothing to click.
 - Placeholders are picked again every time the shared data is refreshed, so a placeholder name or id may belong to someone else, or nobody, after a refresh. A shared link with a placeholder player skips that player once the data has been refreshed.
 
+### Player groups
+
+Data can include a third, optional file that says which groups players belong to (leagues, clubs, teams, cities or regions). When it is loaded, a filter (funnel) button appears in the Players panel. Click it, pick a group type if there is more than one, search for a group, and tick one or more. The table then lists only players in any of the ticked groups. The ticked groups show as chips next to the shown count; click the × on a chip to drop it, or **Clear** in the picker to drop all. Groups only filter the Players table, not the chart or the matches.
+
+Load the file in its own box in the Data column, by URL, or with `?groups=` in the page address. Shared data picks it up automatically. Format: `player, group` plus optional `type` (default `league`) and `label` (it only needs to be on one row of the group). Players in a restricted pool have no groups.
+
 ### CSV format
 
 Click the **CSV format** link next to **Data** on the page for a short version of this.
@@ -64,6 +70,12 @@ date,player1id,player2id,player3id,player4id,score
 2025-09-13,1001,1003,1002,1004,"6-6(7-5), 3-6, 1-0(10-8)"
 ```
 
+**Groups** (optional) has one row per player and group, with the columns `player` and `group`, and optionally `type` and `label`.
+
+```csv
+player,type,group,label
+1001,league,517,NJWPTL
+```
 Shared data opened with a password holds only matches whose result counts for ratings, so matches that APTA doesn't rate are already left out.
 
 ## The chart

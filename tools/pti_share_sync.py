@@ -38,6 +38,7 @@ Options:
                       such as the key file of a removed password
     --from / --to     optional date range (YYYY-MM-DD, inclusive, US Eastern)
     --dry-run         query and encrypt, report sizes, upload nothing, change nothing
+    --no-groups       leave out groups.csv, the player-league memberships behind the explorer's Groups filter
     --keep-csv DIR    also save the CSVs in DIR as uploaded, so with restricted
                       players masked (keep them private all the same)
     --database NAME   database to read (default md:, i.e. MotherDuck); a local
@@ -145,6 +146,19 @@ LEAGUES = '''
   FROM "apta2"."main"."matches_unified", UNNEST([Player1HID, Player2HID, Player1AID, Player2AID]) AS t(p)
   WHERE p IS NOT NULL GROUP BY 1
 '''
+# Player groups: one row per player and league they played in (whole table, like the pools).
+# The league's name is PSName in the leagues table (PSLeagueID is the id in matches_unified.LeagueID).
+# Other group types (club, team, city, region) would be more UNION ALL branches with a different type.
+GROUPS = '''
+  WITH pl AS (
+    SELECT DISTINCT decode(p) AS player, decode(LeagueID) AS lg
+    FROM "apta2"."main"."matches_unified", UNNEST([Player1HID, Player2HID, Player1AID, Player2AID]) AS t(p)
+    WHERE p IS NOT NULL AND coalesce(decode(LeagueID), '') <> ''
+  )
+  SELECT pl.player, 'league' AS type, pl.lg AS "group", coalesce(nullif(l.PSName, ''), pl.lg) AS label
+  FROM pl LEFT JOIN (SELECT DISTINCT ON (PSLeagueID) * FROM "apta2"."main"."leagues") AS l ON l.PSLeagueID = pl.lg
+  ORDER BY "group", player
+'''
 NAMES = '''
   SELECT DISTINCT decode(n) AS name
   FROM "apta2"."main"."matches_unified", UNNEST([Player1HName, Player2HName, Player1AName, Player2AName]) AS t(n)
@@ -158,6 +172,11 @@ def export(a, tmp, pools):
         fail('set MOTHERDUCK_TOKEN')
     con = duckdb.connect(a.database, read_only=not a.database.startswith('md:'))
     out = {}
+    if not a.no_groups:
+        path = os.path.join(tmp, 'groups.csv')
+        rel = con.sql(GROUPS)
+        rel.write_csv(path, header=True)
+        out['groups'] = (path, rel.shape[0])
     for name, tail in (('matches', MATCHES), ('ratings', RATINGS)):
         path = os.path.join(tmp, name + '.csv')
         rel = con.sql(with_f(a) + '\n' + tail)
@@ -180,6 +199,7 @@ def mask(s, pools, csvs, leagues, real_names):
     ph = pti_pools.Placeholders(secrets.token_bytes(32), real_names)
     s.pop('placeholderKey', None)  # stable placeholders used to keep one here
     swap, lists = {}, {n: {} for n in pools}
+    # Restricted players get no group rows: nothing ties a placeholder to a league beyond the pool itself
     path = csvs['ratings'][0]
     with open(path, newline='', encoding='utf-8') as fh:
         rows = list(csv.reader(fh))
@@ -213,7 +233,31 @@ def mask(s, pools, csvs, leagues, real_names):
                     r[c] = swap[r[c]][0]
             w.writerow(r)
     os.replace(path + '.tmp', path)
+    if 'groups' in csvs:
+        path = csvs['groups'][0]
+        with open(path, newline='', encoding='utf-8') as src, open(path + '.tmp', 'w', newline='', encoding='utf-8') as dst:
+            rows, w = csv.reader(src), csv.writer(dst, lineterminator='\n')
+            head = next(rows)
+            w.writerow(head)
+            w.writerows(r for r in rows if r[0] not in swap)
+        os.replace(path + '.tmp', path)
     return lists
+
+
+def compact_groups(path):
+    """Write each group's label on its first row only. The explorer takes the label from
+    whichever row has one, so this saves repeating a long name on every player's row."""
+    import csv
+    seen = set()
+    with open(path, newline='', encoding='utf-8') as src, open(path + '.tmp', 'w', newline='', encoding='utf-8') as dst:
+        rows, w = csv.reader(src), csv.writer(dst, lineterminator='\n')
+        w.writerow(next(rows))
+        for r in rows:
+            if (r[1], r[2]) in seen:
+                r[3] = ''
+            seen.add((r[1], r[2]))
+            w.writerow(r)
+    os.replace(path + '.tmp', path)
 
 
 def reconcile(s, pools):
@@ -271,7 +315,7 @@ def deployed(s3, bucket, folder, s, key):
         fail(f'could not read s3://{bucket}/{folder}/ ({e})')
     try:
         m = json.loads(unseal(key, blob))
-        return [m['ratings'], m['matches']] + list(m.get('pools', {}).values())
+        return [m['ratings'], m['matches']] + ([m['groups']] if m.get('groups') else []) + list(m.get('pools', {}).values())
     except Exception:
         return False
 
@@ -296,6 +340,7 @@ def main():
     p.add_argument('--to', dest='date_to')
     p.add_argument('--dry-run', action='store_true')
     p.add_argument('--keep-csv')
+    p.add_argument('--no-groups', action='store_true', help='leave out groups.csv (player leagues)')
     p.add_argument('--database', default='md:')
     p.add_argument('--pools')
     a = p.parse_args()
@@ -358,6 +403,8 @@ def main():
             csvs, extra = export(a, tmp, pools)
             nm, nr = csvs['matches'][1], csvs['ratings'][1]
             print(f'  matches.csv: {nm:,} matches\n  ratings.csv: {nr:,} players')
+            if 'groups' in csvs:
+                print(f'  groups.csv: {csvs["groups"][1]:,} player-league rows')
             if not nm or not nr:
                 fail('the export is empty; nothing uploaded')
             if pools:
@@ -374,13 +421,15 @@ def main():
                 print(f'  masked {masked:,} players: ' + ', '.join(f'{n} {len(e):,}' for n, e in lists.items()))
             elif s.get('pools'):
                 print('  no restricted pools in use: nobody is masked')
+            if 'groups' in csvs:
+                compact_groups(csvs['groups'][0])
             if a.keep_csv:
                 os.makedirs(a.keep_csv, exist_ok=True)
                 for name, (path, _) in csvs.items():
                     with open(path, 'rb') as src, open(os.path.join(a.keep_csv, name + '.csv'), 'wb') as dst:
                         dst.write(src.read())
 
-            names = {'ratings': secrets.token_hex(16), 'matches': secrets.token_hex(16)}
+            names = {n: secrets.token_hex(16) for n in csvs}  # ratings, matches and, unless --no-groups, groups
             for name, (path, _) in csvs.items():
                 with open(path, 'rb') as fh:
                     raw = fh.read()
@@ -388,6 +437,8 @@ def main():
                 print(f'  encrypted {name}.csv: {len(raw):,} bytes -> {len(blobs[names[name]]):,}')
             manifest = {'v': 2 if pool_files else 1, 'ratings': names['ratings'], 'matches': names['matches'],
                         'updated': dt.datetime.now(dt.timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z')}
+            if 'groups' in names:
+                manifest['groups'] = names['groups']
             if pool_files:
                 manifest['pools'] = pool_files
             blobs[s['manifest']] = seal(key, json.dumps(manifest, separators=(',', ':')).encode())
@@ -406,7 +457,7 @@ def main():
         print(f'  {len(keys)} key file(s)')
 
     # Files the folder should hold afterwards; --prune deletes the rest
-    data = [names['ratings'], names['matches']] + list(pool_files.values()) if names else (now or [])
+    data = list(names.values()) + list(pool_files.values()) if names else (now or [])
     keep = set(data) | {s['manifest']} | {x['file'] for x in s.get('passwords', [])}
     stale = [f for f in listed(s3, a.bucket, folder) if f not in keep] if a.prune else []
 
@@ -424,7 +475,7 @@ def main():
     # Key files go last: they only point to the manifest.
     try:
         if names:
-            for name in [names['ratings'], names['matches']] + list(pool_files.values()) + [s['manifest']]:
+            for name in list(names.values()) + list(pool_files.values()) + [s['manifest']]:
                 put(name, blobs[name])
         for name, body in keys.items():
             put(name, body)
@@ -436,8 +487,8 @@ def main():
     old = []
     if names:
         # Old data files: the ones this folder served, or the secret's last ones if it had none
-        old = [f for f in (now or [s.get('ratings'), s.get('matches')] + s.get('poolFiles', [])) if f and f not in keep]
-        s['ratings'], s['matches'] = names['ratings'], names['matches']
+        old = [f for f in (now or [s.get('ratings'), s.get('matches'), s.get('groups')] + s.get('poolFiles', [])) if f and f not in keep]
+        s['ratings'], s['matches'], s['groups'] = names['ratings'], names['matches'], names.get('groups')
         s['poolFiles'] = list(pool_files.values())
         tmp_secret = a.secret + '.tmp'
         with open(os.open(tmp_secret, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), 'w') as fh:
