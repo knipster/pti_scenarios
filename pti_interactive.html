@@ -130,6 +130,9 @@
     html.dark .pool-chip.shut { background: rgba(148,163,184,.15); color: #cbd5e1; }
     tr.excluded td.use { opacity: 1; }
     tr.excluded .teams, tr.excluded .score { text-decoration: line-through; }
+    .pl-link { color: inherit; text-decoration: underline dotted; text-underline-offset: 2px; cursor: pointer; }
+    .pl-link:hover, .pl-link:focus-visible { color: #6366f1; text-decoration-style: solid; }
+    html.dark .pl-link:hover, html.dark .pl-link:focus-visible { color: #a5b4fc; }
     .chip { display: inline-block; width: .7rem; height: .7rem; border-radius: 999px; vertical-align: middle; }
     .up { color: #e11d48; } .down { color: #059669; }
     html.dark .up { color: #fb7185; } html.dark .down { color: #34d399; }
@@ -1028,6 +1031,18 @@
     });
   }
 
+  // A player in the matches table: a link that shows them on the chart. Players in a
+  // restricted pool the password doesn't unlock get no name and no link.
+  var RESTRICTED = '<span class="muted" title="Restricted player: your password does not unlock their pool">🔒 Restricted</span>';
+  function matchName(i) {
+    var p = S.players[i];
+    if (!p) return '?';
+    if (p.locked) return RESTRICTED;
+    var r = S.eng.root[i];  // a linked id shows its whole group
+    if (S.slot[r] != null) return '<span title="Shown on the chart">' + esc(nameOf(i)) + '</span>';
+    if (S.selected.length >= MAX_SHOWN) return '<span title="Up to ' + MAX_SHOWN + ' players at a time">' + esc(nameOf(i)) + '</span>';
+    return '<button type="button" class="pl-link" data-i="' + r + '" title="Show ' + esc(nameOf(r)) + ' on the chart">' + esc(nameOf(i)) + '</button>';
+  }
   function renderMatches() {
     var body = $('matchesBody'), e = S.eng;
     $('includeAllBtn').style.display = S.excluded.length ? '' : 'none';
@@ -1073,14 +1088,14 @@
         if (S.slot[i] == null) return '';
         var sp = e.startPti(pos), d = e.endPti[pos] - sp;
         return '<span class="whitespace-nowrap mr-3"><span class="chip" style="background:' + colorOf(i) + '"></span> ' +
-          esc(nameOf(i)) + ': ' + (e.hasOv[pos] ? '◆ ' : '') + fmt(sp) + ' → ' + fmt(e.endPti[pos]) +
+          (S.players[i].locked ? RESTRICTED : esc(nameOf(i))) + ': ' + (e.hasOv[pos] ? '◆ ' : '') + fmt(sp) + ' → ' + fmt(e.endPti[pos]) +
           ' <span class="' + (d > 0.005 ? 'up' : d < -0.005 ? 'down' : '') + '">(' + (d >= 0 ? '+' : '') + fmt(d) + ')</span>' +
           ' <span class="muted">σ ' + fmt(e.endSigma[pos]) + '</span></span>';
       }).join('');
       return '<tr data-k="' + k + '"' + (ex || clash ? ' class="excluded"' : '') + '>' +
         '<td class="use"><input type="checkbox" class="use-chk" aria-label="Use match #' + num(k + 1) + ' in the calculation"' + (ex ? '' : ' checked') + (clash && !ex ? ' disabled' : '') + '></td>' +
         '<td class="muted">' + num(k + 1) + '</td><td class="whitespace-nowrap">' + esc(e.dates[k]) + '</td>' +
-        '<td class="teams">' + esc(nameOf(e.origPl[b])) + ' & ' + esc(nameOf(e.origPl[b + 1])) + '</td><td class="teams">' + esc(nameOf(e.origPl[b + 2])) + ' & ' + esc(nameOf(e.origPl[b + 3])) + '</td>' +
+        '<td class="teams">' + matchName(e.origPl[b]) + ' & ' + matchName(e.origPl[b + 1]) + '</td><td class="teams">' + matchName(e.origPl[b + 2]) + ' & ' + matchName(e.origPl[b + 3]) + '</td>' +
         '<td class="whitespace-nowrap score">' + esc(e.scores[k]) + '</td><td>' + cells + '</td></tr>';
     }).join('');
   }
@@ -1660,6 +1675,10 @@
     function flipMatches() { S.matchDir = -S.matchDir; renderMatches(); }
     mth.addEventListener('click', flipMatches);
     mth.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flipMatches(); } });
+    $('matchesBody').addEventListener('click', function (e) {
+      var b = e.target.closest('.pl-link');
+      if (b) { toggle(+b.getAttribute('data-i'), true); renderAll(); }
+    });
     $('matchesBody').addEventListener('change', function (e) {
       var tr = e.target.closest('tr[data-k]');
       if (tr && e.target.classList.contains('use-chk')) setExcluded(+tr.getAttribute('data-k'), !e.target.checked);
