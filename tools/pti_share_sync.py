@@ -74,7 +74,9 @@ SELECT
     (Player1HELOStart IS NOT NULL AND Player2HELOStart IS NOT NULL
     AND Player1AELOStart IS NOT NULL AND Player2AELOStart IS NOT NULL
     AND Player1HELOConfidence IS NOT NULL AND Player2HELOConfidence IS NOT NULL
-    AND Player1AELOConfidence IS NOT NULL AND Player2AELOConfidence IS NOT NULL) AS rated,
+    AND Player1AELOConfidence IS NOT NULL AND Player2AELOConfidence IS NOT NULL
+    -- APTA only rates these result codes; the others (defaults, forfeits, ...) never change a rating
+    AND decode(Winner) IN ('1', '2', '7', '8')) AS rated,
     concat_ws(', ',
       CASE WHEN coalesce(decode("Set1.Team1Score"), '0') || coalesce(decode("Set1.Team2Score"), '0') <> '00' THEN decode("Set1.Team1Score") || '-' || decode("Set1.Team2Score") END,
       CASE WHEN coalesce(decode("Set2.Team1Score"), '0') || coalesce(decode("Set2.Team2Score"), '0') <> '00' THEN decode("Set2.Team1Score") || '-' || decode("Set2.Team2Score") END,
