@@ -387,7 +387,8 @@
     excluded: [],                 // match indexes left out of the calculation
     groups: {},                   // linked ids: root player index -> member indexes (root first)
     matchDir: -1,                 // matches table date order: -1 newest first, 1 oldest first
-    hiddenLines: new Set()        // chart lines hidden from the legend: 'p:<id>' a player, 'o:<id>' an original
+    hiddenLines: new Set(),       // chart lines hidden from the legend: 'p:<id>' a player, 'o:<id>' an original
+    focusId: null                 // ?player= id: shown with their usual partners and opponents when data loads
   };
   var MAX_SHOWN = 8, MAX_TABLE_ROWS = 200, MAX_MATCH_ROWS = 300;
   // Categorical palette (fixed order), light and dark steps
@@ -543,26 +544,21 @@
         S.players.forEach(function (p) { if (p.locked) locked++; else if (p.realId) unlocked++; });
         var pools = S.unlocked || []; S.reveal = S.unlocked = null;
         renderPoolChips(S.poolInfo); S.poolInfo = null;
-        // Show the most active players first
-        var top = [];
-        for (var i = 0; i < S.eng.np; i++) {
-          top.push(i); top.sort(function (a, b) { return S.eng.count[b] - S.eng.count[a]; });
-          if (top.length > 5) top.pop();
-        }
-        top.forEach(function (i) { if (S.eng.count[i]) toggle(i, true); });
+        var shownNote = showDefault();
+        if (S.pendingView) shownNote = '';  // the shared view decides who is shown
         var unrated = 0; for (var k = 0; k < S.eng.n; k++) if (!S.eng.rated(k)) unrated++;
         setStatus(num(S.players.length) + ' players and ' + num(S.eng.n) + ' matches loaded in ' + secs(performance.now() - t0) +
           ' (reading ' + secs(t1 - t0) + ', indexing ' + secs(t2 - t1) + ', rating ' + secs(run.ms) + ')' +
           (r.bad ? '. ' + num(r.bad) + ' rating rows skipped' : '') + (unrated ? '. ' + num(unrated) + ' matches could not be rated' : '') + '.' +
           (unlocked ? ' Real names shown for ' + num(unlocked) + ' restricted players (' + pools.join(', ') + ').' : '') +
-          (locked ? ' ' + num(locked) + ' restricted players have placeholder names (🔒).' : ''), false);
+          (locked ? ' ' + num(locked) + ' restricted players have placeholder names (🔒).' : '') + shownNote, false);
         setPerf(null);
         renderAll();
         setDataOpen(false);  // data is in: give the room to the chart
         // A shared view in the address waits for data, then applies to the first data set loaded
         if (S.pendingView) {
           var eng = S.eng, pending = S.pendingView; S.pendingView = null;
-          pending.then(function (v) { if (v && S.eng === eng) applyView(v); });
+          pending.then(function (v) { if (v && S.eng === eng) applyView(v, focusPlayer()); });
         }
       } catch (e) { setStatus(e.message, true); }
     }, 30);
@@ -911,6 +907,50 @@
     } else if (!on && at >= 0) {
       S.selected.splice(at, 1); delete S.slot[i];
     }
+  }
+
+  // ---------- Players shown when data loads ----------
+  // ?player=id: that player and the 4 people they played with or against most.
+  // Otherwise the 5 most active players of the data's last 90 days.
+  // Locked players are never picked for you.
+  var RECENT_DAYS = 90;
+  function focusPlayer() {
+    var id = S.focusId, e = S.eng;
+    if (!id || !e) return -1;
+    var i = e.index.get(id);
+    // An unlocked restricted player can be named by their real id too
+    if (i === undefined) for (var j = 0; j < S.players.length; j++) if (S.players[j].realId === id) { i = j; break; }
+    return i === undefined ? -1 : e.root[i];
+  }
+  function circleOf(f) {
+    var e = S.eng, met = new Map();
+    e.positions(f).forEach(function (pos) {
+      var k = pos >> 2;
+      for (var q = 0; q < 4; q++) {
+        var i = e.pl[4 * k + q];
+        if (i < 0 || i === f || S.players[i].locked) continue;
+        met.set(i, (met.get(i) || 0) + 1);
+      }
+    });
+    return Array.from(met.keys()).sort(function (a, b) { return met.get(b) - met.get(a) || e.count[b] - e.count[a] || a - b; }).slice(0, 4);
+  }
+  function mostActiveRecently(n) {
+    var e = S.eng, last = -Infinity, k, recent = new Int32Array(e.np), out = [];
+    for (k = 0; k < e.n; k++) if (e.rated(k) && e.day[k] > last) last = e.day[k];
+    for (k = 0; k < e.n; k++) if (e.rated(k) && e.day[k] > last - RECENT_DAYS) for (var q = 0; q < 4; q++) recent[e.pl[4 * k + q]]++;
+    for (var i = 0; i < e.np; i++) if (e.count[i] && !S.players[i].locked) out.push(i);
+    return out.sort(function (a, b) { return recent[b] - recent[a] || e.count[b] - e.count[a] || a - b; }).slice(0, n);
+  }
+  // Shows the default players and returns a note for the status line
+  function showDefault() {
+    var f = focusPlayer();
+    if (f >= 0) {
+      toggle(f, true); circleOf(f).forEach(function (i) { toggle(i, true); });
+      return ' Showing ' + nameOf(f) + ' and the players they played with or against most.';
+    }
+    mostActiveRecently(5).forEach(function (i) { toggle(i, true); });
+    return S.focusId ? ' Player ' + S.focusId + ' is not in this data; showing the most active players of the last ' + RECENT_DAYS + ' days.'
+      : '';
   }
 
   // Players table order: fixed when a header is clicked, so rows don't jump
@@ -1285,7 +1325,8 @@
       search: S.search, matchSearch: S.matchSearch
     };
   }
-  function applyView(v) {
+  // focus: a player (from ?player=) to show on top of the view's players
+  function applyView(v, focus) {
     var e = S.eng, skipped = 0, t = performance.now();
     function idx(id) { var i = e.index.get(String(id)); if (i === undefined) skipped++; return i; }
     function known(i) { return i !== undefined; }
@@ -1322,6 +1363,10 @@
     S.overrides.sort(function (a, b) { return a.k - b.k; });
     var show = [];
     (v.show || []).forEach(function (id) { var i = idx(id); if (known(i) && show.indexOf(e.root[i]) < 0) show.push(e.root[i]); });
+    if (focus >= 0) {
+      if (show.indexOf(focus) < 0) { if (show.length >= MAX_SHOWN) show.length = MAX_SHOWN - 1; show.push(focus); }
+      if (Array.isArray(v.hidden)) v.hidden = v.hidden.filter(function (key) { return key !== 'p:' + e.ids[focus]; });
+    }
     // Nobody from the link in this data: keep the players already shown, as their groups
     if (!show.length) S.selected.forEach(function (i) { if (show.indexOf(e.root[i]) < 0) show.push(e.root[i]); });
     S.selected = []; S.slot = {}; show.slice(0, MAX_SHOWN).forEach(function (i) { toggle(i, true); });
@@ -1736,6 +1781,7 @@
     if (q.get('view') && typeof DecompressionStream === 'function' || /^j/.test(q.get('view') || '')) {
       S.pendingView = unpackView(q.get('view')).catch(function () { return null; });
     }
+    if (q.get('player')) S.focusId = q.get('player').trim();
     if (q.get('ratings')) $('ratingsUrl').value = q.get('ratings');
     if (q.get('matches')) $('matchesUrl').value = q.get('matches');
     if (q.get('ratings') && q.get('matches')) loadUrls(q.get('ratings'), q.get('matches'));
