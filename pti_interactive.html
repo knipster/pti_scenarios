@@ -216,6 +216,10 @@
         <div class="flex items-center gap-2 flex-wrap">
           <div class="seg" id="metricSeg"><button data-v="Pti" class="on">PTI</button><button data-v="Sigma">Sigma</button></div>
           <div class="seg" id="xSeg"><button data-v="index" class="on">By match #</button><button data-v="date">By date</button></div>
+          <div class="flex items-center gap-1" title="PTI axis height. Fit: fit the shown data. Min 30: at least 30 PTI points, more if the data needs it. Custom: exactly the PTI points you enter. Sigma always fits its data.">
+            <div class="seg" id="yScaleSeg"><button data-v="fit">Fit data</button><button data-v="min" class="on">Min 30</button><button data-v="custom">Custom</button></div>
+            <input id="ySpan" class="field field-sm" type="number" min="1" step="1" value="30" aria-label="Custom PTI axis height, in PTI points" style="display:none">
+          </div>
           <div class="seg" id="modeSeg" title="Move: drag starting points and breaks. Add break: click a match point."><button data-v="move" class="on">Move</button><button data-v="add">Add break</button></div>
           <label class="btn" title="Overlay each shown player's history as loaded, before any edits"><input id="origChk" type="checkbox" class="accent-indigo-600"> Show original</label>
           <label class="btn"><input id="invertChk" type="checkbox" class="accent-indigo-600"> Better = up</label>
@@ -341,6 +345,7 @@
     slot: {},            // player index -> colour slot 0..7 (kept while shown)
     metric: 'Pti', xMode: 'index', mode: 'move', invert: false,
     showOrig: false,     // overlay the history as loaded
+    yScale: 'min', ySpan: 30,  // PTI axis: 'fit' the data, at least 30 points ('min'), or exactly ySpan points ('custom')
     orig: null,          // { pti, sigma } end values per position from the first run, before any edits
     search: '',
     matchSearch: '',
@@ -730,9 +735,24 @@
     o.plugins.legend.labels.color = tc.text;
     // By match #: end at the last shown date instead of a rounded-up blank stretch
     if (S.xMode === 'index' && S.xDays && S.xDays.length) o.scales.x.max = S.xDays.length - 0.4; else delete o.scales.x.max;
-    if (drag) { o.scales.y.min = drag.yMin; o.scales.y.max = drag.yMax; }
+    var yr = drag ? { min: drag.yMin, max: drag.yMax } : yRange(chart.data.datasets);
+    if (yr) { o.scales.y.min = yr.min; o.scales.y.max = yr.max; }
     else { delete o.scales.y.min; delete o.scales.y.max; }
     chart.update('none');
+  }
+
+  // Fixed PTI axis bounds for the Min 30 and Custom scales, centred on the shown data; null lets the chart fit the data
+  function yRange(datasets) {
+    if (S.metric !== 'Pti' || S.yScale === 'fit') return null;
+    var lo = Infinity, hi = -Infinity;
+    datasets.forEach(function (d) { d.data.forEach(function (p) { if (p.y < lo) lo = p.y; if (p.y > hi) hi = p.y; }); });
+    if (!isFinite(lo)) return null;
+    var span = S.yScale === 'custom' ? S.ySpan : 30;
+    lo = Math.floor(lo); hi = Math.ceil(hi);
+    if (S.yScale === 'min' && hi - lo >= span) return null;
+    var min = lo - Math.floor((span - (hi - lo)) / 2);
+    if (min < 0 && lo >= 0) min = 0;  // no room is wasted below 0 PTI
+    return { min: min, max: min + span };
   }
 
   function hit(evt) {
@@ -1342,7 +1362,9 @@
     });
     $('formatBtn').addEventListener('click', function () { setDataOpen(true); $('formatHelp').classList.toggle('hidden'); });
     $('dataToggle').addEventListener('click', function () { setDataOpen($('dataSection').classList.contains('collapsed')); });
-    segment('metricSeg', 'metric'); segment('xSeg', 'xMode'); segment('modeSeg', 'mode');
+    segment('metricSeg', 'metric'); segment('xSeg', 'xMode'); segment('modeSeg', 'mode'); segment('yScaleSeg', 'yScale');
+    $('yScaleSeg').addEventListener('click', function () { $('ySpan').style.display = S.yScale === 'custom' ? '' : 'none'; });
+    $('ySpan').addEventListener('input', function () { var v = +this.value; if (v > 0) { S.ySpan = v; refreshChart(); } });
     $('invertChk').addEventListener('change', function () { S.invert = this.checked; refreshChart(); });
     $('origChk').addEventListener('change', function () { S.showOrig = this.checked; refreshChart(); });
 
