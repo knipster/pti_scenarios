@@ -27,7 +27,7 @@ Once both files load, the status line reports how many players and matches were 
 
 ### CSV format
 
-Click **CSV format** on the page for a short version of this.
+Click the **CSV format** link next to **Data** on the page for a short version of this.
 
 **Starting ratings** has one row per player. It needs the columns `id`, `pti` and `sigma`, and can also have `name` and `lastPlayed`.
 
