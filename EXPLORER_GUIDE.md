@@ -96,7 +96,7 @@ A break on an excluded match stays in the list but does nothing until the match 
 
 ### Start spread
 
-To see how much a player's starting PTI matters, pick them in **Start spread** under the chart. The chart adds dashed lines in their colour, each replaying their history from a different starting PTI with the same starting sigma. **Lines** sets how many (2 to 6, 4 by default) and **Every** sets the PTI between them (5 by default), so 4 lines every 5 PTI start at −10, −5, +5 and +10 from the current start. The note beside the controls says how far apart the lines are at the start and after the last match, which shows how quickly they converge.
+To see how much a player's starting PTI matters, click **Start spread** under the chart. It starts with the first shown player; pick another shown player in the list that appears next to it. The chart adds dashed lines in their colour, each replaying their history from a different starting PTI with the same starting sigma. **lines** sets how many (2 to 6, 4 by default) and **every** sets the PTI between them (5 by default), so 4 lines every 5 PTI start at −10, −5, +5 and +10 from the current start. A note under the buttons says how far apart the lines are at the start and after the last match, which shows how quickly they converge. Click **Start spread** again to turn it off and hide its controls.
 
 Hover a spread line for its PTI after each match and how far it is from the player's own line. Click a spread line's start point (●) to make that the player's starting PTI; the spread then re-centres on it. The spread follows all your other edits, and goes into shared links.
 
