@@ -123,6 +123,11 @@
     tr.merged td { opacity: .6; }
     .badge { display: inline-block; font-size: .6875rem; font-weight: 600; padding: 0 .4rem; border-radius: 9999px; background: rgba(99,102,241,.12); color: #6366f1; white-space: nowrap; }
     html.dark .badge { background: rgba(129,140,248,.18); color: #a5b4fc; }
+    .pool-chip { display: inline-block; font-size: .6875rem; font-weight: 500; padding: .05rem .45rem; border-radius: 9999px; white-space: nowrap; border: 1px solid; cursor: default; }
+    .pool-chip.open { background: rgba(16,185,129,.12); color: #047857; border-color: rgba(16,185,129,.35); }
+    .pool-chip.shut { background: rgba(100,116,139,.12); color: #475569; border-color: rgba(100,116,139,.35); }
+    html.dark .pool-chip.open { background: rgba(52,211,153,.15); color: #6ee7b7; }
+    html.dark .pool-chip.shut { background: rgba(148,163,184,.15); color: #cbd5e1; }
     tr.excluded td.use { opacity: 1; }
     tr.excluded .teams, tr.excluded .score { text-decoration: line-through; }
     .chip { display: inline-block; width: .7rem; height: .7rem; border-radius: 999px; vertical-align: middle; }
@@ -147,6 +152,7 @@
           <h1 class="text-xl font-bold tracking-tight flex items-center gap-2">
             PTI History Explorer
             <span id="verBadge" class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 font-medium border border-indigo-500/30">v2.4</span>
+            <span id="poolChips" class="flex flex-wrap items-center gap-1"></span>
           </h1>
           <p class="text-xs muted">Replay match history • Drag starting ratings and breaks to see the effect</p>
         </div>
@@ -522,6 +528,7 @@
         var locked = 0, unlocked = 0;
         S.players.forEach(function (p) { if (p.locked) locked++; else if (p.realId) unlocked++; });
         var pools = S.unlocked || []; S.reveal = S.unlocked = null;
+        renderPoolChips(S.poolInfo); S.poolInfo = null;
         // Show the most active players first
         var top = [];
         for (var i = 0; i < S.eng.np; i++) {
@@ -1480,11 +1487,20 @@
           .then(JSON.parse).catch(function () { return null; });  // a pool that fails to open stays masked
       }));
       return Promise.all([csvs, lists]).then(function (r) {
-        var reveal = {}, opened = [];
-        r[1].forEach(function (l, j) { if (l) { opened.push(mine[j]); for (var id in l) reveal[id] = l[id]; } });
-        return [r[0][0], r[0][1], reveal, opened];
+        var reveal = {}, opened = [], count = {};
+        r[1].forEach(function (l, j) { if (l) { opened.push(mine[j]); count[mine[j]] = Object.keys(l).length; for (var id in l) reveal[id] = l[id]; } });
+        var info = Object.keys(m.pools || {}).map(function (n) { return { name: n, open: n in count, count: count[n] || 0 }; });
+        return [r[0][0], r[0][1], reveal, opened, info];
       });
     });
+  }
+  // One chip per restricted pool in the shared data, next to the version badge: unlocked or locked
+  function renderPoolChips(info) {
+    $('poolChips').innerHTML = !info ? '' : info.map(function (p) {
+      var tip = p.open ? 'Restricted pool ' + p.name + ': unlocked, real names shown for ' + num(p.count) + ' players'
+        : 'Restricted pool ' + p.name + ': locked, its players have placeholder names';
+      return '<span class="pool-chip ' + (p.open ? 'open' : 'shut') + '" title="' + esc(tip) + '">' + (p.open ? '🔓 ' : '🔒 ') + esc(p.name) + '</span>';
+    }).join('');
   }
   function bytes64(s) { return Uint8Array.from(atob(s), function (ch) { return ch.charCodeAt(0); }); }
   function shareMsg(t, bad) { var el = $('shareMsg'); el.textContent = t; el.style.color = bad ? '#f43f5e' : ''; }
@@ -1508,7 +1524,7 @@
       $('shareGo').disabled = true; shareMsg('Checking…');
       openShared(pass).then(function (t) {
         $('shareDlg').close();
-        S.ratingsText = t[0]; S.matchesText = t[1]; S.reveal = t[2]; S.unlocked = t[3];
+        S.ratingsText = t[0]; S.matchesText = t[1]; S.reveal = t[2]; S.unlocked = t[3]; S.poolInfo = t[4];
         tryBuild();
       }).catch(function (err) {
         shareMsg(err && /^[A-Z]/.test(err.message) ? err.message : WRONG, true);

@@ -116,6 +116,8 @@ Copy `tools/pti-pools.example.json` to `pti-pools.json` in the folder that holds
 
 Keep `pti-pools.json` private and out of git (`.gitignore` already skips it), since the exception lists name players.
 
+Once shared data is open, the explorer shows a chip per pool next to the v2.4 badge: 🔓 for pools the password unlocks, 🔒 for the rest. Every password holder sees the pool names this way.
+
 A player in any pool gets a placeholder. Each pool's key shows exactly its own players, so a player in two pools shows to a password holding either one. Placeholder names never share a first name and last initial with any real player in the table.
 
 Every sync picks new placeholders, so "Avery H." in one refresh is someone else, or nobody, in the next. Nobody can follow a restricted player across refreshes. The cost is that anything saved with a placeholder id stops matching after the next sync: a shared view link drops those players and their matches (the page says how many items it skipped), and a downloaded starting-ratings CSV won't line up for them. Players with real ids aren't affected.
