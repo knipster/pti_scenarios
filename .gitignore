@@ -3,3 +3,4 @@ pti-share-secret*.json
 share-out/
 d/
 __pycache__/
+pti-pools.json
