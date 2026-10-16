@@ -366,7 +366,8 @@
     sortOrder: null,              // player indexes in sorted order, set when a header is clicked
     excluded: [],                 // match indexes left out of the calculation
     groups: {},                   // linked ids: root player index -> member indexes (root first)
-    matchDir: -1                  // matches table date order: -1 newest first, 1 oldest first
+    matchDir: -1,                 // matches table date order: -1 newest first, 1 oldest first
+    hiddenLines: new Set()        // chart lines hidden from the legend: 'p:<id>' a player, 'o:<id>' an original
   };
   var MAX_SHOWN = 8, MAX_TABLE_ROWS = 200, MAX_MATCH_ROWS = 300;
   // Categorical palette (fixed order), light and dark steps
@@ -506,7 +507,7 @@
         var t2 = performance.now();
         var run = S.eng.runAll();
         S.orig = { pti: S.eng.endPti.slice(), sigma: S.eng.endSigma.slice(), init: S.eng.initPti.slice() };
-        S.overrides = []; S.selected = []; S.slot = {}; S.sortOrder = null; S.xs = null; S.excluded = []; S.groups = {};
+        S.overrides = []; S.selected = []; S.slot = {}; S.sortOrder = null; S.xs = null; S.excluded = []; S.groups = {}; S.hiddenLines = new Set();
         S.ratingsText = S.matchesText = null;  // free the raw text
         // Show the most active players first
         var top = [];
@@ -659,6 +660,7 @@
         var c = colorOf(r);
         orig.push({
           label: nameOf(i) + ' (original)', data: origSeriesFor(i, xs, gap), order: 1,
+          key: 'o:' + S.eng.ids[i], hidden: S.hiddenLines.has('o:' + S.eng.ids[i]),
           borderColor: c + '99', backgroundColor: c + '99', borderWidth: 1.5, borderDash: j ? [2, 3] : [5, 4], tension: 0,  // linked ids: dotted
           pointRadius: function (ctx) { return ctx.raw && ctx.raw.kind === 'origStart' ? 4 : 0; },
           pointStyle: 'circle', pointHoverRadius: 4, pointHitRadius: 4
@@ -668,7 +670,7 @@
     return S.selected.map(function (i) {
       var c = colorOf(i), data = seriesFor(i, xs, gap), dense = data.length > 120;
       return {
-        label: nameOf(i), data: data,
+        label: nameOf(i), data: data, key: 'p:' + S.eng.ids[i], hidden: S.hiddenLines.has('p:' + S.eng.ids[i]),
         borderColor: c, backgroundColor: c, borderWidth: 2, tension: 0,
         pointBorderColor: surface, pointBorderWidth: 2,
         // Long histories hide the per-match dots (hover still finds them)
@@ -727,7 +729,12 @@
           }
         },
         plugins: {
-          legend: { position: 'top', align: 'start', labels: { color: tc.text, usePointStyle: true, pointStyle: 'circle', boxWidth: 8, boxHeight: 8, padding: 14 } },
+          // Hiding a line is kept by player, so it survives redraws and goes into shared links
+          legend: { position: 'top', align: 'start', onClick: function (evt, item) {
+            var key = chart.data.datasets[item.datasetIndex].key;
+            if (S.hiddenLines.has(key)) S.hiddenLines.delete(key); else S.hiddenLines.add(key);
+            refreshChart();
+          }, labels: { color: tc.text, usePointStyle: true, pointStyle: 'circle', boxWidth: 8, boxHeight: 8, padding: 14 } },
           tooltip: {
             enabled: true, displayColors: true, padding: 10,
             callbacks: {
@@ -765,7 +772,7 @@
   function yRange(datasets) {
     if (S.metric !== 'Pti' || S.yScale === 'fit') return null;
     var lo = Infinity, hi = -Infinity;
-    datasets.forEach(function (d) { d.data.forEach(function (p) { if (p.y < lo) lo = p.y; if (p.y > hi) hi = p.y; }); });
+    datasets.forEach(function (d) { if (!d.hidden) d.data.forEach(function (p) { if (p.y < lo) lo = p.y; if (p.y > hi) hi = p.y; }); });
     if (!isFinite(lo)) return null;
     var span = S.yScale === 'custom' ? S.ySpan : 30;
     lo = Math.floor(lo); hi = Math.ceil(hi);
@@ -1218,7 +1225,11 @@
         return [String(e.rawIds[o.pos & 3][o.k]), keyOf.get(o.k), o.pti != null ? round4(o.pti) : null, o.sigma != null ? round4(o.sigma) : null];
       }),
       excl: S.excluded.map(function (k) { return keyOf.get(k); }),
-      chart: { metric: S.metric, x: S.xMode, invert: S.invert ? 1 : 0, orig: S.showOrig ? 1 : 0, y: S.yScale, ySpan: S.ySpan }
+      chart: { metric: S.metric, x: S.xMode, invert: S.invert ? 1 : 0, orig: S.showOrig ? 1 : 0, y: S.yScale, ySpan: S.ySpan },
+      hidden: Array.from(S.hiddenLines),
+      sort: S.sort.key ? [S.sort.key, S.sort.dir] : null,
+      matchDir: S.matchDir,
+      search: S.search, matchSearch: S.matchSearch
     };
   }
   function applyView(v) {
@@ -1267,6 +1278,11 @@
     if (c.y === 'fit' || c.y === 'min' || c.y === 'custom') S.yScale = c.y;
     if (c.ySpan > 0) S.ySpan = +c.ySpan;
     S.invert = !!c.invert; S.showOrig = !!c.orig;
+    if (Array.isArray(v.hidden)) S.hiddenLines = new Set(v.hidden.map(String));
+    if (Array.isArray(v.sort) && document.querySelector('#playersHead th[data-sort="' + v.sort[0] + '"]')) S.sort = { key: v.sort[0], dir: v.sort[1] < 0 ? -1 : 1 };
+    if (v.matchDir === 1 || v.matchDir === -1) S.matchDir = v.matchDir;
+    if (typeof v.search === 'string') S.search = v.search;
+    if (typeof v.matchSearch === 'string') S.matchSearch = v.matchSearch;
     syncControls();
     S.sortOrder = null;
     setPerf({ recalculated: e.n, ms: performance.now() - t });
@@ -1280,6 +1296,8 @@
     });
     $('ySpan').value = S.ySpan; $('ySpan').style.display = S.yScale === 'custom' ? '' : 'none';
     $('invertChk').checked = S.invert; $('origChk').checked = S.showOrig;
+    $('playerSearch').value = S.search; $('matchSearch').value = S.matchSearch;
+    Array.prototype.forEach.call(document.querySelectorAll('.search-wrap'), function (w) { w.classList.toggle('has-text', w.querySelector('input').value !== ''); });
   }
   function b64url(bytes) {
     var s = '';
