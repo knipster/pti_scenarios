@@ -279,7 +279,11 @@
       <!-- Players -->
       <section class="section border rounded-2xl overflow-hidden lg:col-span-2">
         <div class="section-head px-5 py-3.5 border-b flex items-center justify-between gap-3 flex-wrap">
-          <span class="text-sm font-semibold uppercase tracking-wider">Players <span id="selCount" class="muted normal-case font-normal"></span></span>
+          <div class="flex items-center gap-2 flex-wrap">
+            <div class="seg" id="panelSeg" title="Players: every player. Partners or Opponents: who the player in focus played with or against, and what those matches did to their PTI."><button data-v="players" class="on">Players</button><button data-v="partners">Partners</button><button data-v="opponents">Opponents</button></div>
+            <label id="focusWrap" class="text-xs muted flex items-center gap-1" style="display:none">of <select id="focusSel" class="field" style="width:auto" aria-label="Player in focus"></select></label>
+            <span id="selCount" class="text-xs muted"></span>
+          </div>
           <div class="flex items-center gap-2">
             <span class="search-wrap"><input id="playerSearch" type="search" class="field" placeholder="Search players" aria-label="Search players"><button type="button" class="search-clear" aria-label="Clear search" title="Clear">×</button></span>
             <button id="linkShownBtn" type="button" class="btn" title="Link the shown players into one group (or add them to the one group already shown)">Link shown</button>
@@ -296,6 +300,14 @@
               <th class="num sortable" data-sort="deltaOrig" title="Now PTI minus the PTI in the history as loaded (see Show original)">Δ Original</th>
             </tr></thead>
             <tbody id="playersBody"></tbody>
+          </table>
+          <table class="data" id="relTable" style="display:none">
+            <thead id="relHead"><tr>
+              <th>Show</th><th class="sortable" data-rsort="name">Player</th><th class="num sortable" data-rsort="matches" id="relMatchesTh">Matches</th>
+              <th class="num sortable" data-rsort="contrib" id="relContribTh">Cumulative PTI contribution</th>
+              <th class="num sortable" data-rsort="avg" title="Cumulative PTI contribution divided by the matches">Per match</th>
+            </tr></thead>
+            <tbody id="relBody"></tbody>
           </table>
         </div>
       </section>
@@ -389,7 +401,10 @@
     groups: {},                   // linked ids: root player index -> member indexes (root first)
     matchDir: -1,                 // matches table date order: -1 newest first, 1 oldest first
     hiddenLines: new Set(),       // chart lines hidden from the legend: 'p:<id>' a player, 'o:<id>' an original
-    focusId: null                 // ?player= id: the only player shown when data loads
+    focusId: null,                // ?player= id: the only player shown when data loads
+    panel: 'players',             // players table view: 'players', 'partners' or 'opponents'
+    focus: null,                  // player index the Partners and Opponents lists are for; null = the first shown player
+    relSort: { key: 'matches', dir: -1 }  // Partners and Opponents sort
   };
   var MAX_SHOWN = 8, MAX_TABLE_ROWS = 200, MAX_MATCH_ROWS = 300;
   // Categorical palette (fixed order), light and dark steps
@@ -539,7 +554,7 @@
         var t2 = performance.now();
         var run = S.eng.runAll();
         S.orig = { pti: S.eng.endPti.slice(), sigma: S.eng.endSigma.slice(), init: S.eng.initPti.slice() };
-        S.overrides = []; S.selected = []; S.slot = {}; S.sortOrder = null; S.xs = null; S.excluded = []; S.groups = {}; S.hiddenLines = new Set();
+        S.overrides = []; S.selected = []; S.slot = {}; S.sortOrder = null; S.xs = null; S.excluded = []; S.groups = {}; S.hiddenLines = new Set(); S.focus = null;
         S.ratingsText = S.matchesText = null;  // free the raw text
         var locked = 0, unlocked = 0;
         S.players.forEach(function (p) { if (p.locked) locked++; else if (p.realId) unlocked++; });
@@ -1044,6 +1059,88 @@
         var inp = tr.querySelector(a[0]); if (inp !== document.activeElement) inp.value = fmt(a[1]);
       });
     });
+    renderRel();
+  }
+
+  // ---------- Partners and opponents ----------
+  // The player the lists are for: the one picked, else the first player shown
+  function focusOf() {
+    if (S.focus != null && S.slot[S.focus] != null) return S.focus;
+    return S.selected.length ? S.selected[0] : -1;
+  }
+  // Each partner (or opponent) of player f with the matches they share and
+  // the sum of f's PTI changes in those matches
+  function relations(f, opp) {
+    var e = S.eng, by = new Map(), list = e.positions(f), total = 0;
+    for (var j = 0; j < list.length; j++) {
+      var pos = list[j], s = pos & 3, b = pos - s, d = e.endPti[pos] - e.startPti(pos);
+      total += d;
+      var others = opp ? (s < 2 ? [b + 2, b + 3] : [b, b + 1]) : [b + (s ^ 1)];
+      for (var q = 0; q < others.length; q++) {
+        var i = e.root[e.pl[others[q]]], r = by.get(i);
+        if (!r) by.set(i, r = { i: i, n: 0, sum: 0 });
+        r.n++; r.sum += d;
+      }
+    }
+    return { rows: Array.from(by.values()), total: total };
+  }
+  function renderRelHeaders() {
+    Array.prototype.forEach.call(document.querySelectorAll('#relHead th.sortable'), function (th) {
+      var on = th.getAttribute('data-rsort') === S.relSort.key;
+      th.setAttribute('aria-sort', on ? (S.relSort.dir > 0 ? 'ascending' : 'descending') : 'none');
+      th.setAttribute('data-arrow', on ? (S.relSort.dir > 0 ? ' ▲' : ' ▼') : '');
+    });
+  }
+  function renderRel() {
+    var rel = S.panel !== 'players', opp = S.panel === 'opponents';
+    $('relTable').style.display = rel ? '' : 'none';
+    $('playersHead').parentNode.style.display = rel ? 'none' : '';
+    $('focusWrap').style.display = rel ? '' : 'none';
+    if (!rel) return;
+    renderRelHeaders();
+    var body = $('relBody'), e = S.eng, f = S.eng ? focusOf() : -1;
+    var sel = $('focusSel');
+    sel.innerHTML = S.selected.map(function (i) { return '<option value="' + i + '"' + (i === f ? ' selected' : '') + '>' + esc(nameOf(i)) + '</option>'; }).join('');
+    sel.disabled = S.selected.length < 2;
+    var fname = f >= 0 ? nameOf(f) : 'the player in focus';
+    $('relMatchesTh').textContent = opp ? 'Matches against' : 'Matches with';
+    $('relContribTh').title = 'Sum of ' + fname + "'s PTI changes in matches " + (opp ? 'against' : 'with') + ' this player. Lower PTI is better, so a negative total means these matches brought it down.';
+    if (f < 0) {
+      body.innerHTML = '<tr><td colspan="5" class="muted text-center">Show a player on the chart to list their ' + (opp ? 'opponents' : 'partners') + '.</td></tr>';
+      return;
+    }
+    var q = S.search.toLowerCase(), key = S.relSort.key, dir = S.relSort.dir;
+    var all = relations(f, opp), rows = all.rows.filter(function (r) {
+      var p = S.players[r.i];
+      // A restricted player is only "Restricted": their placeholder name and id aren't shown or searched
+      if (p.locked) return !q || 'restricted'.indexOf(q) >= 0;
+      return !q || p.id.toLowerCase().indexOf(q) >= 0 || p.name.toLowerCase().indexOf(q) >= 0 || !!(p.realId && p.realId.toLowerCase().indexOf(q) >= 0);
+    });
+    function nm(r) { var p = S.players[r.i]; return p.locked ? null : p.name.toLowerCase(); }
+    rows.sort(function (a, b) {
+      if (key === 'name') {
+        var x = nm(a), y = nm(b);
+        if (x === null || y === null) return (x === null) - (y === null) || b.n - a.n;  // restricted players last
+        return (x < y ? -1 : x > y ? 1 : 0) * dir;
+      }
+      var va = key === 'matches' ? a.n : key === 'contrib' ? a.sum : a.sum / a.n;
+      var vb = key === 'matches' ? b.n : key === 'contrib' ? b.sum : b.sum / b.n;
+      return (va - vb) * dir || b.n - a.n || a.i - b.i;
+    });
+    var full = S.selected.length >= MAX_SHOWN, shownRows = rows.slice(0, MAX_TABLE_ROWS);
+    function signed(v) { return Math.abs(v) < 0.005 ? '<span>0.00</span>' : '<span class="' + (v > 0 ? 'up' : 'down') + '">' + (v > 0 ? '+' : '') + fmt(v) + '</span>'; }
+    body.innerHTML = shownRows.map(function (r) {
+      var p = S.players[r.i], shown = S.slot[r.i] != null, avg = r.sum / r.n;
+      var box = p.locked ? '' : '<input type="checkbox" class="show accent-indigo-600"' + (shown ? ' checked' : !full ? '' : ' disabled title="Up to 8 players at a time"') + '>';
+      var who = p.locked ? RESTRICTED : (shown ? '<span class="chip" style="background:' + colorOf(r.i) + '"></span> ' : '') + esc(p.name) +
+        (p.name !== p.id ? ' <span class="muted">' + esc(p.realId || p.id) + '</span>' : '');
+      return '<tr data-i="' + r.i + '"><td>' + box + '</td><td>' + who + '</td><td class="num">' + num(r.n) + '</td>' +
+        '<td class="num">' + signed(r.sum) + '</td><td class="num">' + signed(avg) + '</td></tr>';
+    }).join('') +
+      (rows.length > shownRows.length ? '<tr><td colspan="5" class="muted text-center">Showing ' + num(shownRows.length) + ' of ' + num(rows.length) + '. Search or sort to find others.</td></tr>' : '') +
+      // Each match counts once here (it has two opponents), so this is f's whole PTI change over these matches
+      (rows.length ? (q ? '' : '<tr><td></td><td class="muted">All ' + num(e.positions(f).length) + ' matches</td><td></td><td class="num font-semibold">' + signed(all.total) + '</td><td></td></tr>')
+        : '<tr><td colspan="5" class="muted text-center">' + (q ? 'No match for this search.' : esc(fname) + ' has no rated matches.') + '</td></tr>');
   }
 
   function renderBreaks() {
@@ -1311,7 +1408,9 @@
       hidden: Array.from(S.hiddenLines),
       sort: S.sort.key ? [S.sort.key, S.sort.dir] : null,
       matchDir: S.matchDir,
-      search: S.search, matchSearch: S.matchSearch
+      search: S.search, matchSearch: S.matchSearch,
+      panel: S.panel, focus: S.focus != null && S.slot[S.focus] != null ? e.ids[S.focus] : null,
+      relSort: [S.relSort.key, S.relSort.dir]
     };
   }
   // focus: a player (from ?player=) to show on top of the view's players
@@ -1370,6 +1469,9 @@
     if (v.matchDir === 1 || v.matchDir === -1) S.matchDir = v.matchDir;
     if (typeof v.search === 'string') S.search = v.search;
     if (typeof v.matchSearch === 'string') S.matchSearch = v.matchSearch;
+    if (v.panel === 'players' || v.panel === 'partners' || v.panel === 'opponents') S.panel = v.panel;
+    if (v.focus != null) { var fi = e.index.get(String(v.focus)); S.focus = fi === undefined ? null : e.root[fi]; }
+    if (Array.isArray(v.relSort) && document.querySelector('#relHead th[data-rsort="' + v.relSort[0] + '"]')) S.relSort = { key: v.relSort[0], dir: v.relSort[1] < 0 ? -1 : 1 };
     syncControls();
     S.sortOrder = null;
     setPerf({ recalculated: e.n, ms: performance.now() - t });
@@ -1378,7 +1480,7 @@
     setStatus(el.textContent + ' Shared view applied' + (skipped ? ' (' + num(skipped) + ' item' + (skipped > 1 ? 's' : '') + ' not in this data skipped)' : '') + '.', false);
   }
   function syncControls() {
-    [['metricSeg', S.metric], ['xSeg', S.xMode], ['yScaleSeg', S.yScale], ['modeSeg', S.mode]].forEach(function (a) {
+    [['metricSeg', S.metric], ['xSeg', S.xMode], ['yScaleSeg', S.yScale], ['modeSeg', S.mode], ['panelSeg', S.panel]].forEach(function (a) {
       Array.prototype.forEach.call($(a[0]).children, function (b) { b.classList.toggle('on', b.getAttribute('data-v') === a[1]); });
     });
     $('ySpan').value = S.ySpan; $('ySpan').style.display = S.yScale === 'custom' ? '' : 'none';
@@ -1422,7 +1524,7 @@
     });
   }
 
-  function renderAll() { renderAccuracy(); refreshChart(); renderPlayers(); renderBreaks(); renderLinks(); renderMatches(); }
+  function renderAll() { renderAccuracy(); refreshChart(); renderPlayers(); renderRel(); renderBreaks(); renderLinks(); renderMatches(); }
 
   // ---------- Downloads ----------
   function csvCell(v) { v = v == null ? '' : typeof v === 'number' ? String(Math.round(v * 10000) / 10000) : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
@@ -1668,7 +1770,29 @@
       ['downloadBtn', 'downloadStartsBtn'].forEach(function (id) { $(id).style.display = on === false ? 'none' : ''; });
     };
 
-    $('playerSearch').addEventListener('input', function () { S.search = this.value; renderPlayers(); });
+    $('playerSearch').addEventListener('input', function () { S.search = this.value; renderPlayers(); renderRel(); });
+    $('panelSeg').addEventListener('click', function (e) {
+      var b = e.target.closest('button'); if (!b) return;
+      Array.prototype.forEach.call(this.children, function (c) { c.classList.toggle('on', c === b); });
+      S.panel = b.getAttribute('data-v');
+      renderRel();
+    });
+    $('focusSel').addEventListener('change', function () { S.focus = +this.value; renderRel(); });
+    $('relBody').addEventListener('change', function (e) {
+      var tr = e.target.closest('tr[data-i]');
+      if (tr && e.target.classList.contains('show')) { toggle(+tr.getAttribute('data-i'), e.target.checked); renderAll(); }
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#relHead th.sortable'), function (th) {
+      th.tabIndex = 0;
+      function sortBy() {
+        var key = th.getAttribute('data-rsort');
+        // First click: A to Z for names, most matches first, or the contribution that lowered PTI most first; click again to reverse
+        S.relSort = S.relSort.key === key ? { key: key, dir: -S.relSort.dir } : { key: key, dir: key === 'matches' ? -1 : 1 };
+        renderRel();
+      }
+      th.addEventListener('click', sortBy);
+      th.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sortBy(); } });
+    });
     $('matchSearch').addEventListener('input', function () { S.matchSearch = this.value; renderMatches(); });
     // Clear (×) buttons: shown while a search box has text; clearing runs the box's own input handler
     Array.prototype.forEach.call(document.querySelectorAll('.search-wrap'), function (w) {
