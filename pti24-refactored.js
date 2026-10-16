@@ -59,18 +59,35 @@ function pti24(players, score) {
     };
   });
 
-  // "6-4, 3-6, 1-0" -> [{ winner, gamePct }], gamePct = set winner's share of games
+  // "6-4, 6-6(7-5), 1-0" -> [{ winner, gamePct }], gamePct = set winner's share of games.
+  // Sets count as APTA counts them (same rules as parseSets in pti24-engine.js):
+  //   - a finished set (either side has 6+ games, games not tied): share of games;
+  //   - games tied (6-6), or at most one game played with tiebreak points (a match
+  //     tiebreak, 1-0(10-8) or 0-0(10-8)): 0.54 to the tiebreak winner;
+  //   - 1-0 or 0-1 with no tiebreak points: 0.54 to the side with the game;
+  //   - anything else unfinished (5-4, 2-0, 3-3(7-5)) doesn't count.
+  // "(x-y)" is the tiebreak points from the same side as the games; a suffix
+  // without a dash, as in "7-6(5)", is ignored.
   var sets = [];
   String(score || '').split(',').forEach(function (s) {
+    var open = s.indexOf('('), x = 0, y = 0;
+    if (open >= 0) {
+      var t = s.slice(open + 1).replace(')', '').split('-');
+      if (t.length === 2) {
+        x = parseInt(t[0], 10); y = parseInt(t[1], 10);
+        if (isNaN(x) || isNaN(y)) x = y = 0;
+      }
+      s = s.slice(0, open);
+    }
     var g = s.trim().split('-');
     if (g.length !== 2) return;
     var a = parseInt(g[0], 10), b = parseInt(g[1], 10);
-    if (isNaN(a) || isNaN(b)) return;
-    var total = a + b;
-    sets.push({
-      winner: a > b ? 1 : 2,
-      gamePct: total > 1 ? Math.max(a, b) / total : 0.54  // 1-0 match tiebreak = 0.54
-    });
+    if (isNaN(a) || isNaN(b) || a + b + x + y === 0) return;
+    if (a < 6 && b < 6) {
+      if (x + y === 0) { if (a + b === 1) sets.push({ winner: a > b ? 1 : 2, gamePct: 0.54 }); }
+      else if (a + b <= 1 && x !== y) sets.push({ winner: x > y ? 1 : 2, gamePct: 0.54 });
+    } else if (a !== b) sets.push({ winner: a > b ? 1 : 2, gamePct: Math.max(a, b) / (a + b) });
+    else if (x !== y) sets.push({ winner: x > y ? 1 : 2, gamePct: 0.54 });
   });
 
   // Apply each set in order
