@@ -54,7 +54,7 @@ date,player1id,player2id,player3id,player4id,score
 
 ## The chart
 
-The chart draws one line per shown player: a starting point (●) and then their rating after each match. When data loads, the five players with the most matches in the last 90 days of the data are shown. Add `?player=` and a player id to the page address to start with that player and the four people they played with or against most instead. Players with placeholder names (🔒) are never picked for you. You can show up to 8 at a time from the Players table.
+The chart draws one line per shown player: a starting point (●) and then their rating after each match. When data loads, the five players with the most matches in the last 90 days of the data are shown. Add `?player=` and a player id to the page address to start with just that player instead. Players with placeholder names (🔒) are never picked for you. You can show up to 8 at a time from the Players table.
 
 Click a name in the legend above the chart to hide or show that line. Hover any point to see the player, the match date and their PTI and sigma. When Show original is on, the tooltip also shows the original values.
 
@@ -111,8 +111,9 @@ Type in **Search players** to find players by name or id, and click or tap its �
 | Show | Whether the player is on the chart. |
 | Player | Name and id. |
 | Matches | Matches the player is in. |
+| Now PTI | Rating after the player's last match, with all your edits. |
 | Start PTI, Start sigma | Starting rating. Edit the boxes to change it. |
-| Now PTI, Now sigma | Rating after the player's last match, with all your edits. |
+| Now sigma | Sigma after the player's last match, with all your edits. |
 | Change | Now PTI minus Start PTI. |
 | Δ Original | Now PTI minus the player's last PTI in the history as loaded. It shows what your edits did to that player. |
 
@@ -131,7 +132,7 @@ In the Players table, the extra ids of a group are greyed out with "Not used whi
 
 ## Matches
 
-**Matches for shown players** lists every match played by a player on the chart. Each row shows the match number, date, both teams and the score. The last column shows each shown player's PTI going in and coming out, the change, and their sigma.
+**Matches for shown players** lists every match played by a player on the chart. Each row shows the date, both teams and the score. The last column shows each shown player's PTI going in and coming out, the change, and their sigma.
 
 Click the **Date** header to switch between oldest and newest first. The table lists up to 300 matches at a time.
 
