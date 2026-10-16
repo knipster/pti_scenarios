@@ -6,17 +6,16 @@ The PTI History Explorer (`pti_interactive.html`) replays a set of doubles match
 
 Lower PTI is better. Everything runs in your browser and nothing is uploaded.
 
-The page has five parts, top to bottom:
+The **Data** column on the left is where you load the sample data, shared data or your own two CSV files. The button at the left end of the header opens and closes it. The rest of the page has four parts, top to bottom:
 
-- **Data**: load the sample data or your own two CSV files.
 - **Ratings over time**: the chart, with its controls and the predictive accuracy line.
-- **Players**: every player, with search, sorting and the columns for start, now and change.
+- **Players**: every player, with search, sorting and the columns for start, now and change, plus **Partners** and **Opponents** lists for one player.
 - **Breaks** and **Linked players**: the edits you've made, side by side with the players table on wide screens.
 - **Matches for shown players**: every match played by the players on the chart, with a filter and a checkbox to leave each one out.
 
 ## Loading data
 
-Click **Load sample data** to try the explorer with 10 fictional players and 90 matches. To use your own data, load two CSV files: starting ratings and matches.
+Click **Load sample data** to try the explorer with 10 fictional players and 90 matches. If you were given a password for shared data, click **Password** next to it and enter it there. To use your own data, load two CSV files: starting ratings and matches.
 
 There are three ways to load each file:
 
@@ -24,11 +23,21 @@ There are three ways to load each file:
 - Type a URL in the box underneath and click **Load URLs**.
 - Put both URLs in the page address: `pti_interactive.html?ratings=ratings.csv&matches=matches.csv`. A URL on another site only works if that site allows cross-origin requests.
 
-Once both files load, the status line reports how many players and matches were read and how long it took. It also says how many rating rows were skipped and how many matches couldn't be rated. The Data section then collapses to one summary line; click **Data** to open it again.
+Once both files load, the status line reports how many players and matches were read and how long it took. It also says how many rating rows were skipped and how many matches couldn't be rated. The Data column then collapses to a slim rail showing the number of players (PLAY) and matches (MTCH), written as 75k or 1.2M once they pass a thousand or a million. Hover over the rail for the full status line, and click it or the header button to open the column again. On a phone the column opens as a drawer over the page and has no rail; tap outside it or **Hide** to close it.
+
+### Restricted players
+
+Shared data can hide who some players are. Players in a restricted pool appear under a placeholder name with 🔒 next to it, such as "Avery H. 🔒", and an id starting with `x-`. Their ratings and matches are all there; only their names are hidden. A password that unlocks the pool shows their real names and ids instead.
+
+When shared data with restricted pools is open, the header shows a chip for each pool: 🔓 for pools your password unlocks and 🔒 for the rest. Hover a chip to see whether it is unlocked and, if so, how many players it names. The status line also says how many players have real names shown and how many have placeholders.
+
+- In the Players table, a placeholder player can still be put on the chart like anyone else.
+- In the Matches table and the Partners and Opponents lists, players in a locked pool show as **🔒 Restricted**, with no name and nothing to click.
+- Placeholders are picked again every time the shared data is refreshed, so a placeholder name or id may belong to someone else, or nobody, after a refresh. A shared link with a placeholder player skips that player once the data has been refreshed.
 
 ### CSV format
 
-Click **CSV format** on the page for a short version of this.
+Click the **CSV format** link next to **Data** on the page for a short version of this.
 
 **Starting ratings** has one row per player. It needs the columns `id`, `pti` and `sigma`, and can also have `name` and `lastPlayed`.
 
@@ -94,6 +103,12 @@ A break (◆) sets a player's PTI, sigma or both just before a chosen match, for
 
 A break on an excluded match stays in the list but does nothing until the match is included again.
 
+### Start spread
+
+To see how much a player's starting PTI matters, click **Start spread** under the chart. It starts with the first shown player; pick another shown player in the list that appears next to it. The chart adds dashed lines in their colour, each replaying their history from a different starting PTI with the same starting sigma. **lines** sets how many (2 to 6, 4 by default) and **every** sets the PTI between them (5 by default), so 4 lines every 5 PTI start at −10, −5, +5 and +10 from the current start. A note under the buttons says how far apart the lines are at the start and after the last match, which shows how quickly they converge. On the PTI chart, labels mark the lowest and highest starting PTI and the lowest and highest PTI after the last match, across the player's own line and the spread lines. Click **Start spread** again to turn it off and hide its controls.
+
+Hover a spread line for its PTI after each match and how far it is from the player's own line. Click a spread line's start point (●) to make that the player's starting PTI; the spread then re-centres on it. The spread follows all your other edits, and goes into shared links.
+
 ### Undoing edits
 
 - **Reset starting ratings** puts every starting PTI and sigma back to the values in the file.
@@ -102,14 +117,13 @@ A break on an excluded match stays in the list but does nothing until the match 
 
 ## Players and linked ids
 
-The Players table lists every player, with their starting and current ratings. Tick **Show** to put a player on the chart (up to 8). **Clear shown** takes everyone off the chart.
+The Players table lists every player, with their starting and current ratings. Click a player's name to put them on the chart (up to 8), and click it again to take them off. A shown player has a dot in their line's colour next to their name, and players not on the chart have an empty ring. Shown players are listed first. **Clear shown** takes everyone off the chart.
 
 Type in **Search players** to find players by name or id, and click or tap its × to clear it. Click a column header to sort by it, and click again to reverse the order. The table lists up to 200 rows at a time, so search or sort to reach the rest.
 
 | Column | Meaning |
 | --- | --- |
-| Show | Whether the player is on the chart. |
-| Player | Name and id. |
+| Player | Name and id. Click it to show or hide the player on the chart. |
 | Matches | Matches the player is in. |
 | Now PTI | Rating after the player's last match, with all your edits. |
 | Start PTI, Start sigma | Starting rating. Edit the boxes to change it. |
@@ -118,6 +132,19 @@ Type in **Search players** to find players by name or id, and click or tap its �
 | Δ Original | Now PTI minus the player's last PTI in the history as loaded. It shows what your edits did to that player. |
 
 In the Change and Δ Original columns, green means the PTI went down (better) and red means it went up (worse).
+
+### Partners and opponents
+
+Switch the table from **Players** to **Partners** or **Opponents** to see who one player played with or against, and what those matches did to their PTI. The lists are for the player picked in **of**, which starts as the first player you put on the chart. Only players on the chart can be picked.
+
+| Column | Meaning |
+| --- | --- |
+| Player | Name and id. Click it to show or hide that partner or opponent on the chart. |
+| Matches with / Matches against | Rated matches the two played together, or against each other. |
+| Cumulative PTI contribution | The sum of the picked player's PTI changes in those matches, with all your edits. |
+| Per match | Cumulative PTI contribution divided by the matches. |
+
+Lower PTI is better, so a green (negative) contribution means those matches brought the picked player's PTI down, and red means they pushed it up. The last row adds up all of the player's matches, which is their whole PTI change; in Opponents each match has two opponents, so the opponents' contributions add up to twice that. Players in a restricted pool your password doesn't unlock are listed as 🔒 Restricted, without a name and can't be clicked, as in the Matches table. **Search players** filters these lists too.
 
 ### Linking duplicate ids
 
@@ -132,7 +159,7 @@ In the Players table, the extra ids of a group are greyed out with "Not used whi
 
 ## Matches
 
-**Matches for shown players** lists every match played by a player on the chart. Each row shows the date, both teams and the score. The last column shows each shown player's PTI going in and coming out, the change, and their sigma.
+**Matches for shown players** lists every match played by a player on the chart. Each row shows the date, both teams and the score. Click a player's name to put them on the chart too; the names of players already shown, and everyone's once 8 are shown, aren't clickable. Players in a locked restricted pool show as 🔒 Restricted. The last column shows each shown player's PTI going in and coming out, the change, and their sigma.
 
 Click the **Date** header to switch between oldest and newest first. The table lists up to 300 matches at a time.
 
@@ -148,7 +175,7 @@ A match where two linked ids of the same player meet is marked "Not rated: linke
 
 ## Sharing a view
 
-Click **Share** in the header to copy a link to what you're looking at. The link holds the shown players and which of their lines are hidden, linked ids, starting rating and sigma changes, breaks, excluded matches, the chart options, how the Players and Matches tables are sorted, and the text in both search boxes. It doesn't hold the data itself; if the page was opened with `?ratings=` and `?matches=` URLs, those stay in the link. Add `&player=` and an id to a shared link to open the shared view with that one player added to the chart.
+Click **Share** in the header to copy a link to what you're looking at. The link holds the shown players and which of their lines are hidden, linked ids, starting rating and sigma changes, the start spread, breaks, excluded matches, the chart options, which players list is open (Players, Partners or Opponents) and for whom, how the tables are sorted, and the text in both search boxes. It doesn't hold the data itself; if the page was opened with `?ratings=` and `?matches=` URLs, those stay in the link. Add `&player=` and an id to a shared link to open the shared view with that one player added to the chart.
 
 When someone opens the link, the page waits until they load a data set, then applies the view to it. Anything the data doesn't have, such as a player id or a match that isn't in it, is skipped, and the status line says how many items were skipped. Matches are found by their date and four player ids, so a link still works on a later export of the same data.
 
@@ -158,7 +185,8 @@ If the browser can't copy to the clipboard, the page shows the link in a box to 
 
 - **Try a what-if:** show a player, drag their start point, and watch their partners' and opponents' lines move too. The predictive accuracy line tells you whether the change fits the results better.
 - **Check a layoff:** add a break before a player's first match after the gap, then compare with Show original.
-- **Find who they played:** show one player and type a partner's or opponent's name in Filter by player.
+- **Find who they played:** show one player and switch the Players table to Partners or Opponents, or type a partner's or opponent's name in Filter by player.
+- **Link to one player:** add `?player=` and their id to the page address, for example `pti_interactive.html?player=1001`, to open the explorer with just that player on the chart.
 - **Speed:** the line next to the reset buttons shows how long the last recalculation took.
 - **Theme:** the **Light Mode** / **Dark Mode** button in the header switches the colours. Your choice is remembered.
 - **Small screens:** the header tucks away while you scroll, the chart gets shorter, and you can drag points with a finger. The tables scroll sideways when they don't fit.

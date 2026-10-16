@@ -80,11 +80,37 @@
     .btn-primary, html.dark .btn-primary, html:not(.dark) .btn-primary { background: #4f46e5; border-color: #4f46e5; color: #fff; }
     .btn-primary:hover, html.dark .btn-primary:hover, html:not(.dark) .btn-primary:hover { background: #4338ca; }
     .btn:disabled { opacity: .45; cursor: not-allowed; }
-    #dataSection.collapsed #dataBody { display: none; }
-    #dataSection.collapsed .section-head { border-bottom-width: 0; }
-    #dataSection:not(.collapsed) #dataSummary { display: none; }
-    #dataToggle .chev { transition: transform .2s; }
-    #dataSection.collapsed #dataToggle .chev { transform: rotate(-90deg); }
+    /* Data column: open beside the page, or collapsed to a slim rail (phones: a drawer over the page) */
+    .layout { display: flex; align-items: flex-start; }
+    .layout > main { flex: 1 1 auto; min-width: 0; }
+    #dataPanel { position: sticky; top: var(--hdr-h, 0px); height: calc(100vh - var(--hdr-h, 0px)); flex: none; overflow-y: auto; border-right: 1px solid; }
+    html.dark #dataPanel { background: #0f1422; border-color: #1f2937; }
+    html:not(.dark) #dataPanel { background: #ffffff; border-color: #e2e8f0; }
+    #dataPanel #dataSection { border: 0; border-radius: 0; background: transparent; }
+    #dataPanel:not(.collapsed) { width: 22.5rem; }
+    #dataPanel:not(.collapsed) #dataRail, #dataPanel.collapsed #dataSection { display: none; }
+    #dataPanel.collapsed { width: 3.75rem; }
+    #dataRail { display: flex; flex-direction: column; align-items: center; gap: .875rem; width: 100%; padding: 1.125rem 0 1rem; cursor: pointer; }
+    #dataRail .rail-count { display: flex; flex-direction: column; align-items: center; width: 2.75rem; padding: .35rem 0; border-radius: .6rem; border: 1px solid; border-top-width: 2px; font-size: .625rem; font-weight: 700; letter-spacing: .03em; line-height: 1.3; }
+    #dataRail .rail-count b { font-size: .8125rem; font-variant-numeric: tabular-nums; }
+    html.dark #dataRail .rail-count { background: #111827; border-color: #1f2937; color: #9ca3af; }
+    html:not(.dark) #dataRail .rail-count { background: #f8fafc; border-color: #e2e8f0; color: #475569; }
+    html.dark #dataRail .rail-count b { color: #f3f4f6; } html:not(.dark) #dataRail .rail-count b { color: #0f172a; }
+    #dataRail .rail-count.r { border-top-color: #6366f1; } #dataRail .rail-count.m { border-top-color: #f43f5e; }
+    #dataRail .rail-label { writing-mode: vertical-rl; transform: rotate(180deg); font-size: .6875rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    #dataPanelBtn { position: relative; flex: none; width: 2.5rem; height: 2.5rem; justify-content: center; padding: 0; }
+    #dataPanelBtn[aria-expanded="true"] { color: #4f46e5; border-color: #818cf8; }
+    html:not(.dark) #dataPanelBtn[aria-expanded="true"] { background: #eef2ff; }
+    html.dark #dataPanelBtn[aria-expanded="true"] { color: #a5b4fc; background: rgba(99,102,241,.15); }
+    #dataPanelBtn .dot { position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; border-radius: 9999px; background: #10b981; border: 2px solid; display: none; }
+    html.dark #dataPanelBtn .dot { border-color: #111827; } html:not(.dark) #dataPanelBtn .dot { border-color: #fff; }
+    #dataPanelBtn.loaded .dot { display: block; }
+    #dataScrim { display: none; }
+    @media (max-width: 767px) {
+      #dataPanel { position: fixed; top: 0; left: 0; z-index: 60; height: 100vh; height: 100dvh; width: min(22.5rem, 86vw) !important; box-shadow: 4px 0 24px -6px rgba(0,0,0,.25); }
+      #dataPanel.collapsed { display: none; }
+      #dataPanel:not(.collapsed) + #dataScrim { display: block; position: fixed; inset: 0; z-index: 55; background: rgba(2,6,23,.5); }
+    }
     #shareDlg { border-radius: 1rem; padding: 0; max-width: 22rem; width: calc(100% - 2rem); color: inherit; }
     html.dark #shareDlg { background: #111827; border: 1px solid #1f2937; }
     html:not(.dark) #shareDlg { background: #ffffff; border: 1px solid #e2e8f0; }
@@ -134,11 +160,19 @@
     .pl-link:hover, .pl-link:focus-visible { color: #6366f1; text-decoration-style: solid; }
     html.dark .pl-link:hover, html.dark .pl-link:focus-visible { color: #a5b4fc; }
     .chip { display: inline-block; width: .7rem; height: .7rem; border-radius: 999px; vertical-align: middle; }
+    .chip.ring { box-shadow: inset 0 0 0 1.5px currentColor; opacity: .4; }
+    /* Player names in the Players, Partners and Opponents lists: click to show or hide on the chart */
+    .pl-name { background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+    .pl-name:hover .nm, .pl-name:focus-visible .nm { text-decoration: underline; text-underline-offset: 2px; }
+    .pl-name:hover .chip.ring, .pl-name:focus-visible .chip.ring { opacity: .8; }
+    .pl-name:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; border-radius: .25rem; }
+    .pl-name.off { cursor: default; }
     .up { color: #e11d48; } .down { color: #059669; }
     html.dark .up { color: #fb7185; } html.dark .down { color: #34d399; }
 
     #chartWrap { position: relative; height: 520px; touch-action: none; }
     @media (max-width: 640px) { #chartWrap { height: 380px; } }
+    #chartWrap.pick { cursor: pointer; }
     #chartWrap.grab { cursor: grab; } #chartWrap.grabbing { cursor: grabbing; } #chartWrap.add { cursor: crosshair; }
     .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 1rem; }
   </style>
@@ -159,6 +193,11 @@
   <header class="border-b backdrop-blur-md sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
       <div class="flex items-center gap-3">
+        <button id="dataPanelBtn" type="button" class="btn" aria-controls="dataPanel" aria-expanded="true" title="Show or hide the data files">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" stroke-width="2"></rect><path d="M9 4v16" stroke-width="2"></path></svg>
+          <span class="dot"></span>
+          <span class="sr-only">Data</span>
+        </button>
         <div class="p-2.5 bg-indigo-600/20 border border-indigo-500/30 rounded-xl text-indigo-500 dark:text-indigo-400">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
         </div>
@@ -188,21 +227,31 @@
     </div>
   </header>
 
-  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-8">
-
-    <!-- Data (collapses once data is loaded) -->
+  <div class="layout">
+  <!-- Data column (collapses to a rail once data is loaded) -->
+  <aside id="dataPanel" aria-label="Data">
+    <div id="dataRail" role="button" tabindex="0" title="Show the data files">
+      <span class="text-indigo-600 dark:text-indigo-400"><svg class="w-5 h-5" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3" stroke-width="2"></ellipse><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" stroke-width="2"></path></svg></span>
+      <span class="rail-count r" title="Players in the starting ratings">PLAY<b id="railRatings">–</b></span>
+      <span class="rail-count m" title="Matches">MTCH<b id="railMatches">–</b></span>
+      <span id="railLabel" class="rail-label muted">Data</span>
+    </div>
     <section id="dataSection" class="section border rounded-2xl overflow-hidden">
       <div class="section-head px-5 py-3.5 border-b flex items-center justify-between gap-3 flex-wrap">
         <div class="flex items-center gap-3 min-w-0">
-          <button id="dataToggle" type="button" class="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider" aria-expanded="true" aria-controls="dataBody" title="Show or hide the data files">
-            <svg class="chev w-4 h-4" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          <div class="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+            <svg class="w-4 h-4" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3" stroke-width="2"></ellipse><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" stroke-width="2"></path></svg>
             Data
-          </button>
-          <span id="dataSummary" class="text-xs muted truncate"></span>
+          </div>
+          <button id="formatBtn" type="button" class="text-xs muted underline underline-offset-2 hover:text-indigo-600 dark:hover:text-indigo-400" aria-controls="formatHelp" aria-expanded="false" title="Show or hide the columns each CSV file needs">CSV format</button>
         </div>
+        <button id="dataHide" type="button" class="btn" title="Hide the data files">&laquo; Hide</button>
         <div class="flex gap-2 flex-wrap">
           <button id="sampleBtn" type="button" class="btn">Load sample data</button>
-          <button id="formatBtn" type="button" class="btn">CSV format</button>
+          <button id="passBtn" type="button" class="btn" title="Open shared data with a password (Alt+Shift+P)">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
+            Password
+          </button>
         </div>
       </div>
       <div id="dataBody" class="p-4 sm:p-5 space-y-4">
@@ -212,7 +261,7 @@
           <p>Files can be dropped on the boxes below, chosen from disk, or loaded from URLs. URLs can also go in this page's address: <code>pti_interactive.html?ratings=ratings.csv&amp;matches=matches.csv</code>. URLs on another site need that site to allow cross-origin requests.</p>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 gap-4">
           <div class="glass-card rounded-2xl p-4 border-t-2 border-t-indigo-500 space-y-3">
             <div class="label muted">Starting ratings CSV</div>
             <label id="ratingsDrop" class="dropzone block">
@@ -238,6 +287,11 @@
         </div>
       </div>
     </section>
+
+  </aside>
+  <div id="dataScrim"></div>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-8">
 
     <!-- Chart -->
     <section class="section border rounded-2xl overflow-hidden">
@@ -267,11 +321,18 @@
         <div class="flex gap-2 flex-wrap">
           <button id="resetStartsBtn" type="button" class="btn">Reset starting ratings</button>
           <button id="clearBreaksBtn" type="button" class="btn">Remove all breaks</button>
+          <button id="spreadBtn" type="button" class="btn" aria-pressed="false" disabled title="Draw extra lines for one shown player, each from a different starting PTI around their current one, to see how fast the lines come together. Click a line's start point to use that starting PTI.">Start spread</button>
+          <span id="spreadCtl" class="flex items-center gap-2 flex-wrap text-xs" style="display:none">
+            <select id="spreadSel" class="field" style="width:auto" aria-label="Player to draw a start spread for"></select>
+            <label class="flex items-center gap-1 muted" title="Number of extra lines (2 to 6)"><input id="spreadN" class="field field-sm" type="number" min="2" max="6" step="1" value="4" style="width:3.25rem"> lines</label>
+            <label class="flex items-center gap-1 muted" title="PTI between the starting points">every <input id="spreadStep" class="field field-sm" type="number" min="0.5" step="0.5" value="5" style="width:4rem"> PTI</label>
+          </span>
           <!-- Hidden for now; run showDownloads() in the browser console to show them -->
           <button id="downloadBtn" type="button" class="btn" style="display:none">Download results CSV</button>
           <button id="downloadStartsBtn" type="button" class="btn" style="display:none">Download starting ratings CSV</button>
           <span id="perf" class="text-xs muted self-center" role="status"></span>
         </div>
+        <p id="spreadInfo" class="text-xs muted" role="status" style="display:none"></p>
       </div>
     </section>
 
@@ -279,7 +340,11 @@
       <!-- Players -->
       <section class="section border rounded-2xl overflow-hidden lg:col-span-2">
         <div class="section-head px-5 py-3.5 border-b flex items-center justify-between gap-3 flex-wrap">
-          <span class="text-sm font-semibold uppercase tracking-wider">Players <span id="selCount" class="muted normal-case font-normal"></span></span>
+          <div class="flex items-center gap-2 flex-wrap">
+            <div class="seg" id="panelSeg" title="Players: every player. Partners or Opponents: who the player in focus played with or against, and what those matches did to their PTI."><button data-v="players" class="on">Players</button><button data-v="partners">Partners</button><button data-v="opponents">Opponents</button></div>
+            <label id="focusWrap" class="text-xs muted flex items-center gap-1" style="display:none">of <select id="focusSel" class="field" style="width:auto" aria-label="Player in focus"></select></label>
+            <span id="selCount" class="text-xs muted"></span>
+          </div>
           <div class="flex items-center gap-2">
             <span class="search-wrap"><input id="playerSearch" type="search" class="field" placeholder="Search players" aria-label="Search players"><button type="button" class="search-clear" aria-label="Clear search" title="Clear">×</button></span>
             <button id="linkShownBtn" type="button" class="btn" title="Link the shown players into one group (or add them to the one group already shown)">Link shown</button>
@@ -289,13 +354,21 @@
         <div class="max-h-[28rem] overflow-auto">
           <table class="data">
             <thead id="playersHead"><tr>
-              <th>Show</th><th class="sortable" data-sort="name">Player</th><th class="num sortable" data-sort="matches">Matches</th>
+              <th class="sortable" data-sort="name" title="Click a name to show or hide that player on the chart">Player</th><th class="num sortable" data-sort="matches">Matches</th>
               <th class="num sortable" data-sort="nowPti">Now PTI</th>
               <th class="num sortable" data-sort="startPti">Start PTI</th><th class="num sortable" data-sort="startSigma">Start sigma</th>
               <th class="num sortable" data-sort="change">Change</th><th class="num sortable" data-sort="nowSigma">Now sigma</th>
               <th class="num sortable" data-sort="deltaOrig" title="Now PTI minus the PTI in the history as loaded (see Show original)">Δ Original</th>
             </tr></thead>
             <tbody id="playersBody"></tbody>
+          </table>
+          <table class="data" id="relTable" style="display:none">
+            <thead id="relHead"><tr>
+              <th class="sortable" data-rsort="name" title="Click a name to show or hide that player on the chart">Player</th><th class="num sortable" data-rsort="matches" id="relMatchesTh">Matches</th>
+              <th class="num sortable" data-rsort="contrib" id="relContribTh">Cumulative PTI contribution</th>
+              <th class="num sortable" data-rsort="avg" title="Cumulative PTI contribution divided by the matches">Per match</th>
+            </tr></thead>
+            <tbody id="relBody"></tbody>
           </table>
         </div>
       </section>
@@ -344,8 +417,9 @@
       </div>
     </section>
   </main>
+  </div>
 
-  <!-- Opened with Alt+Shift+P or a double-click on the version badge -->
+  <!-- Opened with the Password button in the Data column, Alt+Shift+P or a double-click on the version badge -->
   <dialog id="shareDlg" aria-labelledby="shareTitle">
     <form id="shareForm" method="dialog" class="p-5 space-y-3">
       <div class="flex items-center justify-between">
@@ -389,7 +463,11 @@
     groups: {},                   // linked ids: root player index -> member indexes (root first)
     matchDir: -1,                 // matches table date order: -1 newest first, 1 oldest first
     hiddenLines: new Set(),       // chart lines hidden from the legend: 'p:<id>' a player, 'o:<id>' an original
-    focusId: null                 // ?player= id: the only player shown when data loads
+    focusId: null,                // ?player= id: the only player shown when data loads
+    panel: 'players',             // players table view: 'players', 'partners' or 'opponents'
+    focus: null,                  // player index the Partners and Opponents lists are for; null = the first shown player
+    relSort: { key: 'matches', dir: -1 }, // Partners and Opponents sort
+    spread: { i: null, n: 4, step: 5 }    // start spread: player index (null = off), number of lines, PTI between them
   };
   var MAX_SHOWN = 8, MAX_TABLE_ROWS = 200, MAX_MATCH_ROWS = 300;
   // Categorical palette (fixed order), light and dark steps
@@ -414,12 +492,25 @@
   function secs(ms) { return ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(1) + ' s'; }
   function setStatus(msg, bad) {
     var el = $('status'); el.textContent = msg; el.style.color = bad ? '#f43f5e' : '';
-    $('dataSummary').textContent = msg;  // shown in the header while the section is collapsed
+    $('dataRail').title = msg;           // shown on the rail while the data column is collapsed
     if (bad) setDataOpen(true);          // never hide a problem
   }
   function setDataOpen(open) {
-    $('dataSection').classList.toggle('collapsed', !open);
-    $('dataToggle').setAttribute('aria-expanded', open ? 'true' : 'false');
+    $('dataPanel').classList.toggle('collapsed', !open);
+    $('dataPanelBtn').setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  // Short counts for the data rail: 950, 1.5k, 75k, 1.2M
+  function shortNum(n) {
+    if (n < 1000) return String(n);
+    var k = n / 1000;
+    if (Math.round(k) < 1000) return (k < 10 ? +k.toFixed(1) : Math.round(k)) + 'k';
+    var m = n / 1e6;
+    return (m < 10 ? +m.toFixed(1) : Math.round(m)) + 'M';
+  }
+  function setDataCounts(players, matches) {
+    $('railRatings').textContent = shortNum(players); $('railRatings').parentNode.title = num(players) + ' players';
+    $('railMatches').textContent = shortNum(matches); $('railMatches').parentNode.title = num(matches) + ' matches';
+    $('dataPanelBtn').classList.add('loaded');
   }
   function setPerf(res) {
     if (!res) { $('perf').textContent = ''; return; }
@@ -539,7 +630,7 @@
         var t2 = performance.now();
         var run = S.eng.runAll();
         S.orig = { pti: S.eng.endPti.slice(), sigma: S.eng.endSigma.slice(), init: S.eng.initPti.slice() };
-        S.overrides = []; S.selected = []; S.slot = {}; S.sortOrder = null; S.xs = null; S.excluded = []; S.groups = {}; S.hiddenLines = new Set();
+        S.overrides = []; S.selected = []; S.slot = {}; S.sortOrder = null; S.xs = null; S.excluded = []; S.groups = {}; S.hiddenLines = new Set(); S.focus = null; S.spread.i = null;
         S.ratingsText = S.matchesText = null;  // free the raw text
         var locked = 0, unlocked = 0;
         S.players.forEach(function (p) { if (p.locked) locked++; else if (p.realId) unlocked++; });
@@ -555,6 +646,7 @@
           (locked ? ' ' + num(locked) + ' restricted players have placeholder names (🔒).' : '') + shownNote, false);
         setPerf(null);
         renderAll();
+        setDataCounts(S.players.length, S.eng.n);
         setDataOpen(false);  // data is in: give the room to the chart
         // A shared view in the address waits for data, then applies to the first data set loaded
         if (S.pendingView) {
@@ -700,6 +792,7 @@
         });
       });
     });
+    var spread = spreadDatasets(xs, gap);
     return S.selected.map(function (i) {
       var c = colorOf(i), data = seriesFor(i, xs, gap), dense = data.length > 120;
       return {
@@ -716,7 +809,77 @@
         },
         order: 0
       };
-    }).concat(orig);
+    }).concat(spread, orig);
+  }
+
+  // ---------- Start spread ----------
+  // Extra lines for one shown player, each replaying the history from a different
+  // starting PTI (same sigma), spaced evenly around the current start:
+  // ±step, ±2·step, ±3·step, as many as asked for
+  var spreadCache = null;
+  function spreadPlayer() { var i = S.spread.i; return i != null && S.slot[i] != null && S.eng.firstPos[i] >= 0 ? i : -1; }
+  function spreadOffsets() {
+    var out = [], n = S.spread.n, st = S.spread.step;
+    for (var j = 0; j < n; j++) out.push((j % 2 ? -1 : 1) * st * (1 + (j >> 1)));
+    return out.sort(function (a, b) { return a - b; });
+  }
+  // Runs each start through the engine and puts the real one back. While dragging, the
+  // last result is reused so the drag stays smooth; it's redone when the drag ends.
+  function spreadRuns() {
+    var e = S.eng, i = spreadPlayer();
+    if (i < 0) return (spreadCache = null);
+    if (drag && spreadCache && spreadCache.i === i) return spreadCache;
+    var p0 = e.initPti[i], s0 = e.initSigma[i], list = e.positions(i), lines = [];
+    spreadOffsets().forEach(function (off, j) {
+      var v = Math.round(Math.min(120, Math.max(-10, p0 + off)) * 100) / 100;
+      if (v === p0) return;
+      e.setStart(i, v, s0);
+      lines.push({ j: j, start: v, pti: list.map(function (pos) { return e.endPti[pos]; }), sigma: list.map(function (pos) { return e.endSigma[pos]; }) });
+    });
+    e.setStart(i, p0, s0);
+    return (spreadCache = { i: i, start: p0, sigma: s0, list: list, lines: lines });
+  }
+  function spreadDatasets(xs, gap) {
+    var run = spreadRuns();
+    renderSpreadInfo(run);
+    if (!run) return [];
+    var i = run.i, c = colorOf(i), pti = field() === 'pti', id = S.eng.ids[i];
+    return run.lines.map(function (ln) {
+      var data = [{ x: xs[run.list[0] >> 2] - gap, y: pti ? ln.start : run.sigma, kind: 'spreadStart', i: i, v: ln.start }];
+      run.list.forEach(function (pos, j) { data.push({ x: xs[pos >> 2], y: pti ? ln.pti[j] : ln.sigma[j], kind: 'spread', i: i, k: pos >> 2, v: ln.start, j: j }); });
+      return {
+        // Same name as the player's own line (a placeholder for a restricted player)
+        label: nameOf(i) + ' from ' + fmt(ln.start, 1), data: data, order: 1,
+        key: 's:' + id + ':' + ln.j, hidden: S.hiddenLines.has('s:' + id + ':' + ln.j),
+        borderColor: c + '80', backgroundColor: c + '80', borderWidth: 1.5, borderDash: [6, 3], tension: 0,
+        pointRadius: function (ctx) { return ctx.raw && ctx.raw.kind === 'spreadStart' ? 5 : 0; },
+        pointHoverRadius: function (ctx) { return ctx.raw && ctx.raw.kind === 'spreadStart' ? 7 : 4; },
+        pointStyle: 'circle', pointHitRadius: 6
+      };
+    });
+  }
+  // How far apart the lines are at the start and after the last match
+  function renderSpreadInfo(run) {
+    var el = $('spreadInfo');
+    el.style.display = run && run.lines.length ? '' : 'none';
+    if (!run || !run.lines.length) { el.textContent = ''; return; }
+    var e = S.eng, last = run.list.length - 1, now = e.endPti[run.list[last]];
+    var lo = Math.min(run.start, run.lines[0].start), hi = Math.max(run.start, run.lines[run.lines.length - 1].start);
+    var elo = now, ehi = now;
+    run.lines.forEach(function (ln) { elo = Math.min(elo, ln.pti[last]); ehi = Math.max(ehi, ln.pti[last]); });
+    el.textContent = 'Start spread: starts ' + fmt(lo, 1) + '–' + fmt(hi, 1) + ' (' + fmt(hi - lo, 1) + ' apart) end ' + fmt(elo) + '–' + fmt(ehi) +
+      ' (' + fmt(ehi - elo) + ' apart) after ' + num(run.list.length) + ' matches';
+  }
+  function renderSpreadControls() {
+    var sel = $('spreadSel'), i = S.eng ? spreadPlayer() : -1, btn = $('spreadBtn');
+    // Out of the way until it's turned on: just the button, and only the button while off
+    btn.classList.toggle('btn-primary', i >= 0); btn.setAttribute('aria-pressed', i >= 0 ? 'true' : 'false');
+    btn.disabled = !S.eng || !S.selected.length;
+    $('spreadCtl').style.display = i >= 0 ? '' : 'none';
+    sel.innerHTML = S.selected.map(function (j) {
+      return '<option value="' + j + '"' + (j === i ? ' selected' : '') + '>' + esc(nameOf(j)) + '</option>';
+    }).join('');
+    $('spreadN').value = S.spread.n; $('spreadStep').value = S.spread.step;
   }
 
   function tooltipLines(raw) {
@@ -726,6 +889,13 @@
       var o0 = prevPos >= 0 ? os[prevPos] : S.players[raw.i].pti;
       return ['Original, match #' + num(raw.k + 1) + ' • ' + S.eng.scores[raw.k],
         'PTI ' + fmt(o0) + ' → ' + fmt(os[op]) + ' • sigma ' + fmt(S.orig.sigma[op])];
+    }
+    if (raw.kind === 'spreadStart') return ['Spread start: ' + fmt(raw.v) + ' PTI', 'Click to use this starting PTI'];
+    if (raw.kind === 'spread') {
+      var run = spreadCache, real = run ? S.eng.endPti[run.list[raw.j]] : NaN, own = run && run.lines.find(function (l) { return l.start === raw.v; });
+      var gapNow = own ? own.pti[raw.j] - real : NaN;
+      return ['Started at ' + fmt(raw.v) + ', match #' + num(raw.k + 1) + ' • ' + S.eng.scores[raw.k],
+        'PTI ' + fmt(own ? own.pti[raw.j] : raw.y) + ' (' + (gapNow >= 0 ? '+' : '') + fmt(gapNow) + ' vs the current start)'];
     }
     if (raw.kind === 'start') return ['Starting ' + (S.metric === 'Pti' ? 'PTI' : 'sigma') + ': ' + fmt(raw.y), 'Drag to change'];
     if (raw.kind === 'break') return ['Break before match #' + num(raw.k + 1) + ': ' + fmt(raw.y), 'Drag to move, double-click to remove'];
@@ -741,10 +911,47 @@
       (e.origPl[pos] !== e.pl[pos] ? ' (as ' + nameOf(e.origPl[pos]) + ')' : '')] : []);
   }
 
+  // Start spread: labels the lowest and highest starting PTI and the lowest and
+  // highest PTI after the last match, across the player's own line and the spread lines
+  var spreadLabels = {
+    id: 'spreadLabels',
+    afterDatasetsDraw: function (c) {
+      var run = spreadCache;
+      if (!run || !run.lines.length || S.metric !== 'Pti' || spreadPlayer() !== run.i) return;
+      var id = S.eng.ids[run.i], pts = [];
+      c.data.datasets.forEach(function (d, j) {
+        if (d.hidden || !(d.key === 'p:' + id || d.key.indexOf('s:' + id + ':') === 0)) return;
+        var els = c.getDatasetMeta(j).data, n = d.data.length;
+        if (n) pts.push({ s: els[0], sy: d.data[0].y, e: els[n - 1], ey: d.data[n - 1].y });
+      });
+      if (pts.length < 2) return;
+      function pick(k, _, low) { return pts.reduce(function (a, b) { return (low ? b[k] < a[k] : b[k] > a[k]) ? b : a; }); }
+      var tc = themeColors(), ctx = c.ctx, area = c.chartArea;
+      ctx.save();
+      ctx.font = '600 11px Inter, sans-serif'; ctx.textBaseline = 'middle';
+      function label(el, text, left, y) {
+        var w = ctx.measureText(text).width + 8, x = left ? el.x - 10 - w : el.x + 10;
+        x = Math.max(area.left, Math.min(area.right - w, x));
+        y = Math.max(area.top + 8, Math.min(area.bottom - 8, y));
+        ctx.globalAlpha = 0.85; ctx.fillStyle = tc.surface; ctx.fillRect(x, y - 8, w, 16);
+        ctx.globalAlpha = 1; ctx.fillStyle = tc.text; ctx.textAlign = 'left'; ctx.fillText(text, x + 4, y);
+      }
+      // A pair of labels closer than one label's height is pushed apart so both stay readable
+      function pair(k, el, names, left, d) {
+        var lo = pick(k, null, true), hi = pick(k, null, false), yl = lo[el].y, yh = hi[el].y;
+        if (Math.abs(yl - yh) < 17) { var mid = (yl + yh) / 2, dir = yl >= yh ? 1 : -1; yl = mid + dir * 8.5; yh = mid - dir * 8.5; }
+        label(hi[el], names[1] + fmt(hi[k], d), left, yh); label(lo[el], names[0] + fmt(lo[k], d), left, yl);
+      }
+      pair('sy', 's', ['Min start ', 'Max start '], false, 1);
+      pair('ey', 'e', ['Min end ', 'Max end '], true, 2);
+      ctx.restore();
+    }
+  };
+
   function makeChart() {
     var tc = themeColors();
     chart = new Chart($('chart'), {
-      type: 'line',
+      type: 'line', plugins: [spreadLabels],
       data: { datasets: buildDatasets() },
       options: {
         animation: false, responsive: true, maintainAspectRatio: false, parsing: false, normalized: true,
@@ -773,7 +980,7 @@
             callbacks: {
               title: function (items) {
                 var r = items[0].raw; if (!r) return '';
-                return nameOf(r.i) + (r.kind === 'match' || r.kind === 'orig' ? ' • ' + S.eng.dates[r.k] : '');
+                return nameOf(r.i) + (r.kind === 'match' || r.kind === 'orig' || r.kind === 'spread' ? ' • ' + S.eng.dates[r.k] : '');
               },
               label: function (item) { return item.raw ? tooltipLines(item.raw) : ''; }
             }
@@ -821,7 +1028,7 @@
     if (!els.length) return null;
     for (var j = 0; j < els.length; j++) {
       var raw = chart.data.datasets[els[j].datasetIndex].data[els[j].index];
-      if (raw && raw.kind !== 'orig' && raw.kind !== 'origStart') return { raw: raw };
+      if (raw && raw.kind !== 'orig' && raw.kind !== 'origStart' && raw.kind !== 'spread') return { raw: raw };
     }
     return null;
   }
@@ -835,6 +1042,9 @@
       removeOverride(raw.i, raw.k); lastClick = { t: 0 }; return;
     }
     lastClick = { t: now, raw: raw };
+    if (raw.kind === 'spreadStart') {  // use this line's start as the player's starting PTI
+      setPerf(S.eng.setStart(raw.i, raw.v, S.eng.initSigma[raw.i])); renderAll(); return;
+    }
     if (raw.kind === 'match' && (S.mode === 'add' || evt.shiftKey)) { addOverride(raw.i, raw.k); return; }
     if (raw.kind === 'start' || raw.kind === 'break') {
       drag = { raw: raw, yMin: chart.scales.y.min, yMax: chart.scales.y.max, value: null };
@@ -847,6 +1057,7 @@
     if (!drag) {
       var h = hit(evt), w = $('chartWrap');
       w.classList.toggle('grab', !!h && (h.raw.kind === 'start' || h.raw.kind === 'break'));
+      w.classList.toggle('pick', !!h && h.raw.kind === 'spreadStart');
       w.classList.toggle('add', !!h && h.raw.kind === 'match' && (S.mode === 'add' || evt.shiftKey));
       return;
     }
@@ -1016,8 +1227,8 @@
         : g ? ' <span class="badge" title="' + esc(g.slice(1).map(nameOf).join(', ')) + '">+' + (g.length - 1) + ' linked</span>' : '';
       var off = merged ? ' disabled title="Not used while linked to ' + esc(nameOf(r)) + '"' : '';
       return '<tr data-i="' + i + '"' + (merged ? ' class="merged"' : '') + '>' +
-        '<td><input type="checkbox" class="show accent-indigo-600"' + (shown ? ' checked' : '') + (merged ? off : !shown && full ? ' disabled title="Up to 8 players at a time"' : '') + '></td>' +
-        '<td>' + (shown ? '<span class="chip" style="background:' + colorOf(i) + '"></span> ' : '') + esc(p.name) + lockBadge(p) + (p.name !== p.id ? ' <span class="muted">' + esc(p.realId || p.id) + '</span>' : '') + tag + '</td>' +
+        '<td>' + nameToggle(i, esc(p.name) + lockBadge(p) + (p.name !== p.id ? ' <span class="muted">' + esc(p.realId || p.id) + '</span>' : ''),
+          merged ? 'Not used while linked to ' + nameOf(r) : !shown && full ? 'Up to ' + MAX_SHOWN + ' players at a time' : null) + tag + '</td>' +
         '<td class="num">' + num(e.count[i]) + '</td>' +
         '<td class="num now-pti">' + (merged ? '–' : fmt(e.currentPti(i))) + '</td>' +
         '<td class="num"><input type="number" step="0.01" class="field field-sm start-pti" value="' + fmt(e.initPti[i]) + '"' + off + '></td>' +
@@ -1025,10 +1236,20 @@
         '<td class="num now-ch ' + (merged ? '' : ch > 0.005 ? 'up' : ch < -0.005 ? 'down' : '') + '">' + (merged ? '–' : (ch >= 0 ? '+' : '') + fmt(ch)) + '</td>' +
         '<td class="num now-sigma">' + (merged ? '–' : fmt(e.currentSigma(i))) + '</td>' + deltaCell(i, merged) + '</tr>';
     }).join('') + (matched > rows.length
-      ? '<tr><td colspan="9" class="muted text-center">Showing ' + num(rows.length) + ' of ' + num(matched) + ' players. Search or sort to find others.</td></tr>' : '');
+      ? '<tr><td colspan="8" class="muted text-center">Showing ' + num(rows.length) + ' of ' + num(matched) + ' players. Search or sort to find others.</td></tr>' : '');
     $('selCount').textContent = '(' + S.selected.length + ' of ' + MAX_SHOWN + ' shown)';
     $('clearShownBtn').disabled = !S.selected.length;
     $('linkShownBtn').disabled = S.selected.length < 2;
+  }
+  // A player's name in the Players, Partners and Opponents lists. Clicking it shows or hides
+  // them on the chart; the dot is their line colour while shown and an empty ring when not.
+  // why: the reason it can't be clicked right now, or null
+  function nameToggle(i, label, why) {
+    var shown = S.slot[i] != null;
+    var dot = shown ? '<span class="chip" style="background:' + colorOf(i) + '"></span> ' : '<span class="chip ring"></span> ';
+    if (why) return '<span class="pl-name off" title="' + esc(why) + '">' + dot + '<span class="nm">' + label + '</span></span>';
+    return '<button type="button" class="pl-name" data-i="' + i + '" aria-pressed="' + shown + '" title="' + (shown ? 'Hide from' : 'Show on') + ' the chart">' +
+      dot + '<span class="nm">' + label + '</span></button>';
   }
   function updatePlayerNumbers() {
     var e = S.eng;
@@ -1044,6 +1265,88 @@
         var inp = tr.querySelector(a[0]); if (inp !== document.activeElement) inp.value = fmt(a[1]);
       });
     });
+    renderRel();
+  }
+
+  // ---------- Partners and opponents ----------
+  // The player the lists are for: the one picked, else the first player shown
+  function focusOf() {
+    if (S.focus != null && S.slot[S.focus] != null) return S.focus;
+    return S.selected.length ? S.selected[0] : -1;
+  }
+  // Each partner (or opponent) of player f with the matches they share and
+  // the sum of f's PTI changes in those matches
+  function relations(f, opp) {
+    var e = S.eng, by = new Map(), list = e.positions(f), total = 0;
+    for (var j = 0; j < list.length; j++) {
+      var pos = list[j], s = pos & 3, b = pos - s, d = e.endPti[pos] - e.startPti(pos);
+      total += d;
+      var others = opp ? (s < 2 ? [b + 2, b + 3] : [b, b + 1]) : [b + (s ^ 1)];
+      for (var q = 0; q < others.length; q++) {
+        var i = e.root[e.pl[others[q]]], r = by.get(i);
+        if (!r) by.set(i, r = { i: i, n: 0, sum: 0 });
+        r.n++; r.sum += d;
+      }
+    }
+    return { rows: Array.from(by.values()), total: total };
+  }
+  function renderRelHeaders() {
+    Array.prototype.forEach.call(document.querySelectorAll('#relHead th.sortable'), function (th) {
+      var on = th.getAttribute('data-rsort') === S.relSort.key;
+      th.setAttribute('aria-sort', on ? (S.relSort.dir > 0 ? 'ascending' : 'descending') : 'none');
+      th.setAttribute('data-arrow', on ? (S.relSort.dir > 0 ? ' ▲' : ' ▼') : '');
+    });
+  }
+  function renderRel() {
+    var rel = S.panel !== 'players', opp = S.panel === 'opponents';
+    $('relTable').style.display = rel ? '' : 'none';
+    $('playersHead').parentNode.style.display = rel ? 'none' : '';
+    $('focusWrap').style.display = rel ? '' : 'none';
+    if (!rel) return;
+    renderRelHeaders();
+    var body = $('relBody'), e = S.eng, f = S.eng ? focusOf() : -1;
+    var sel = $('focusSel');
+    sel.innerHTML = S.selected.map(function (i) { return '<option value="' + i + '"' + (i === f ? ' selected' : '') + '>' + esc(nameOf(i)) + '</option>'; }).join('');
+    sel.disabled = S.selected.length < 2;
+    var fname = f >= 0 ? nameOf(f) : 'the player in focus';
+    $('relMatchesTh').textContent = opp ? 'Matches against' : 'Matches with';
+    $('relContribTh').title = 'Sum of ' + fname + "'s PTI changes in matches " + (opp ? 'against' : 'with') + ' this player. Lower PTI is better, so a negative total means these matches brought it down.';
+    if (f < 0) {
+      body.innerHTML = '<tr><td colspan="4" class="muted text-center">Show a player on the chart to list their ' + (opp ? 'opponents' : 'partners') + '.</td></tr>';
+      return;
+    }
+    var q = S.search.toLowerCase(), key = S.relSort.key, dir = S.relSort.dir;
+    var all = relations(f, opp), rows = all.rows.filter(function (r) {
+      var p = S.players[r.i];
+      // A restricted player is only "Restricted": their placeholder name and id aren't shown or searched
+      if (p.locked) return !q || 'restricted'.indexOf(q) >= 0;
+      return !q || p.id.toLowerCase().indexOf(q) >= 0 || p.name.toLowerCase().indexOf(q) >= 0 || !!(p.realId && p.realId.toLowerCase().indexOf(q) >= 0);
+    });
+    function nm(r) { var p = S.players[r.i]; return p.locked ? null : p.name.toLowerCase(); }
+    rows.sort(function (a, b) {
+      if (key === 'name') {
+        var x = nm(a), y = nm(b);
+        if (x === null || y === null) return (x === null) - (y === null) || b.n - a.n;  // restricted players last
+        return (x < y ? -1 : x > y ? 1 : 0) * dir;
+      }
+      var va = key === 'matches' ? a.n : key === 'contrib' ? a.sum : a.sum / a.n;
+      var vb = key === 'matches' ? b.n : key === 'contrib' ? b.sum : b.sum / b.n;
+      return (va - vb) * dir || b.n - a.n || a.i - b.i;
+    });
+    var full = S.selected.length >= MAX_SHOWN, shownRows = rows.slice(0, MAX_TABLE_ROWS);
+    function signed(v) { return Math.abs(v) < 0.005 ? '<span>0.00</span>' : '<span class="' + (v > 0 ? 'up' : 'down') + '">' + (v > 0 ? '+' : '') + fmt(v) + '</span>'; }
+    body.innerHTML = shownRows.map(function (r) {
+      var p = S.players[r.i], shown = S.slot[r.i] != null, avg = r.sum / r.n;
+      // A restricted player stays a plain "🔒 Restricted": no name and nothing to click
+      var who = p.locked ? RESTRICTED : nameToggle(r.i, esc(p.name) + (p.name !== p.id ? ' <span class="muted">' + esc(p.realId || p.id) + '</span>' : ''),
+        !shown && full ? 'Up to ' + MAX_SHOWN + ' players at a time' : null);
+      return '<tr data-i="' + r.i + '"><td>' + who + '</td><td class="num">' + num(r.n) + '</td>' +
+        '<td class="num">' + signed(r.sum) + '</td><td class="num">' + signed(avg) + '</td></tr>';
+    }).join('') +
+      (rows.length > shownRows.length ? '<tr><td colspan="4" class="muted text-center">Showing ' + num(shownRows.length) + ' of ' + num(rows.length) + '. Search or sort to find others.</td></tr>' : '') +
+      // Each match counts once here (it has two opponents), so this is f's whole PTI change over these matches
+      (rows.length ? (q ? '' : '<tr><td class="muted">All ' + num(e.positions(f).length) + ' matches</td><td></td><td class="num font-semibold">' + signed(all.total) + '</td><td></td></tr>')
+        : '<tr><td colspan="4" class="muted text-center">' + (q ? 'No match for this search.' : esc(fname) + ' has no rated matches.') + '</td></tr>');
   }
 
   function renderBreaks() {
@@ -1307,11 +1610,14 @@
         return [String(e.rawIds[o.pos & 3][o.k]), keyOf.get(o.k), o.pti != null ? round4(o.pti) : null, o.sigma != null ? round4(o.sigma) : null];
       }),
       excl: S.excluded.map(function (k) { return keyOf.get(k); }),
-      chart: { metric: S.metric, x: S.xMode, invert: S.invert ? 1 : 0, orig: S.showOrig ? 1 : 0, y: S.yScale, ySpan: S.ySpan },
+      chart: { metric: S.metric, x: S.xMode, invert: S.invert ? 1 : 0, orig: S.showOrig ? 1 : 0, y: S.yScale, ySpan: S.ySpan,
+        spread: [spreadPlayer() >= 0 ? e.ids[S.spread.i] : null, S.spread.n, S.spread.step] },
       hidden: Array.from(S.hiddenLines),
       sort: S.sort.key ? [S.sort.key, S.sort.dir] : null,
       matchDir: S.matchDir,
-      search: S.search, matchSearch: S.matchSearch
+      search: S.search, matchSearch: S.matchSearch,
+      panel: S.panel, focus: S.focus != null && S.slot[S.focus] != null ? e.ids[S.focus] : null,
+      relSort: [S.relSort.key, S.relSort.dir]
     };
   }
   // focus: a player (from ?player=) to show on top of the view's players
@@ -1365,11 +1671,18 @@
     if (c.y === 'fit' || c.y === 'min' || c.y === 'custom') S.yScale = c.y;
     if (c.ySpan > 0) S.ySpan = +c.ySpan;
     S.invert = !!c.invert; S.showOrig = !!c.orig;
+    if (Array.isArray(c.spread)) {
+      var si = c.spread[0] != null ? e.index.get(String(c.spread[0])) : undefined;
+      S.spread = { i: si === undefined ? null : e.root[si], n: c.spread[1] >= 2 && c.spread[1] <= 6 ? Math.round(c.spread[1]) : 4, step: c.spread[2] > 0 ? +c.spread[2] : 5 };
+    }
     if (Array.isArray(v.hidden)) S.hiddenLines = new Set(v.hidden.map(String));
     if (Array.isArray(v.sort) && document.querySelector('#playersHead th[data-sort="' + v.sort[0] + '"]')) S.sort = { key: v.sort[0], dir: v.sort[1] < 0 ? -1 : 1 };
     if (v.matchDir === 1 || v.matchDir === -1) S.matchDir = v.matchDir;
     if (typeof v.search === 'string') S.search = v.search;
     if (typeof v.matchSearch === 'string') S.matchSearch = v.matchSearch;
+    if (v.panel === 'players' || v.panel === 'partners' || v.panel === 'opponents') S.panel = v.panel;
+    if (v.focus != null) { var fi = e.index.get(String(v.focus)); S.focus = fi === undefined ? null : e.root[fi]; }
+    if (Array.isArray(v.relSort) && document.querySelector('#relHead th[data-rsort="' + v.relSort[0] + '"]')) S.relSort = { key: v.relSort[0], dir: v.relSort[1] < 0 ? -1 : 1 };
     syncControls();
     S.sortOrder = null;
     setPerf({ recalculated: e.n, ms: performance.now() - t });
@@ -1378,7 +1691,7 @@
     setStatus(el.textContent + ' Shared view applied' + (skipped ? ' (' + num(skipped) + ' item' + (skipped > 1 ? 's' : '') + ' not in this data skipped)' : '') + '.', false);
   }
   function syncControls() {
-    [['metricSeg', S.metric], ['xSeg', S.xMode], ['yScaleSeg', S.yScale], ['modeSeg', S.mode]].forEach(function (a) {
+    [['metricSeg', S.metric], ['xSeg', S.xMode], ['yScaleSeg', S.yScale], ['modeSeg', S.mode], ['panelSeg', S.panel]].forEach(function (a) {
       Array.prototype.forEach.call($(a[0]).children, function (b) { b.classList.toggle('on', b.getAttribute('data-v') === a[1]); });
     });
     $('ySpan').value = S.ySpan; $('ySpan').style.display = S.yScale === 'custom' ? '' : 'none';
@@ -1422,7 +1735,7 @@
     });
   }
 
-  function renderAll() { renderAccuracy(); refreshChart(); renderPlayers(); renderBreaks(); renderLinks(); renderMatches(); }
+  function renderAll() { renderAccuracy(); refreshChart(); renderSpreadControls(); renderPlayers(); renderRel(); renderBreaks(); renderLinks(); renderMatches(); }
 
   // ---------- Downloads ----------
   function csvCell(v) { v = v == null ? '' : typeof v === 'number' ? String(Math.round(v * 10000) / 10000) : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
@@ -1581,6 +1894,7 @@
       if (e.altKey && e.shiftKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyP') { e.preventDefault(); showShare(); }
     });
     $('verBadge').addEventListener('dblclick', showShare);
+    $('passBtn').addEventListener('click', showShare);
     $('shareClose').addEventListener('click', function () { $('shareDlg').close(); });
     $('shareForm').addEventListener('submit', function (e) {
       e.preventDefault();
@@ -1627,6 +1941,18 @@
     // Touching the chart also gets the header out of the way
     $('chart').addEventListener('pointerdown', function () { if (window.scrollY > 0) tuck(true); });
     small.addEventListener && small.addEventListener('change', function () { if (!small.matches) tuck(false); });
+    // The data column sits just under the header, whatever its height
+    function hdrH() { document.documentElement.style.setProperty('--hdr-h', h.offsetHeight + 'px'); }
+    hdrH();
+    if (window.ResizeObserver) new ResizeObserver(hdrH).observe(h); else window.addEventListener('resize', hdrH);
+  }
+
+  // Click on a player's name in the Players, Partners or Opponents list
+  function toggleFromName(e) {
+    var b = e.target.closest('button.pl-name'); if (!b) return;
+    var i = +b.getAttribute('data-i');
+    toggle(i, S.slot[i] == null);
+    renderAll();
   }
 
   function init() {
@@ -1638,11 +1964,27 @@
       $('ratingsDrop').classList.add('loaded'); $('matchesDrop').classList.add('loaded');
       tryBuild();
     });
-    $('formatBtn').addEventListener('click', function () { setDataOpen(true); $('formatHelp').classList.toggle('hidden'); });
-    $('dataToggle').addEventListener('click', function () { setDataOpen($('dataSection').classList.contains('collapsed')); });
+    $('formatBtn').addEventListener('click', function () {
+      var shown = !$('formatHelp').classList.toggle('hidden');
+      this.setAttribute('aria-expanded', shown ? 'true' : 'false');
+    });
+    $('dataPanelBtn').addEventListener('click', function () { setDataOpen($('dataPanel').classList.contains('collapsed')); });
+    $('dataHide').addEventListener('click', function () { setDataOpen(false); });
+    $('dataScrim').addEventListener('click', function () { setDataOpen(false); });
+    $('dataRail').addEventListener('click', function () { setDataOpen(true); });
+    $('dataRail').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDataOpen(true); } });
     segment('metricSeg', 'metric'); segment('xSeg', 'xMode'); segment('modeSeg', 'mode'); segment('yScaleSeg', 'yScale');
     $('yScaleSeg').addEventListener('click', function () { $('ySpan').style.display = S.yScale === 'custom' ? '' : 'none'; });
     $('ySpan').addEventListener('input', function () { var v = +this.value; if (v > 0) { S.ySpan = v; refreshChart(); } });
+    $('spreadBtn').addEventListener('click', function () {
+      if (!S.eng) return;
+      // On: for the first shown player (pick another in the list); off: hide the lines and controls
+      S.spread.i = spreadPlayer() >= 0 ? null : S.selected.length ? S.selected[0] : null;
+      refreshChart(); renderSpreadControls();
+    });
+    $('spreadSel').addEventListener('change', function () { S.spread.i = +this.value; refreshChart(); });
+    $('spreadN').addEventListener('input', function () { var v = Math.round(+this.value); if (v >= 2 && v <= 6) { S.spread.n = v; refreshChart(); } });
+    $('spreadStep').addEventListener('input', function () { var v = +this.value; if (v > 0) { S.spread.step = v; refreshChart(); } });
     $('invertChk').addEventListener('change', function () { S.invert = this.checked; refreshChart(); });
     $('origChk').addEventListener('change', function () { S.showOrig = this.checked; refreshChart(); });
 
@@ -1668,7 +2010,26 @@
       ['downloadBtn', 'downloadStartsBtn'].forEach(function (id) { $(id).style.display = on === false ? 'none' : ''; });
     };
 
-    $('playerSearch').addEventListener('input', function () { S.search = this.value; renderPlayers(); });
+    $('playerSearch').addEventListener('input', function () { S.search = this.value; renderPlayers(); renderRel(); });
+    $('panelSeg').addEventListener('click', function (e) {
+      var b = e.target.closest('button'); if (!b) return;
+      Array.prototype.forEach.call(this.children, function (c) { c.classList.toggle('on', c === b); });
+      S.panel = b.getAttribute('data-v');
+      renderRel();
+    });
+    $('focusSel').addEventListener('change', function () { S.focus = +this.value; renderRel(); });
+    $('relBody').addEventListener('click', toggleFromName);
+    Array.prototype.forEach.call(document.querySelectorAll('#relHead th.sortable'), function (th) {
+      th.tabIndex = 0;
+      function sortBy() {
+        var key = th.getAttribute('data-rsort');
+        // First click: A to Z for names, most matches first, or the contribution that lowered PTI most first; click again to reverse
+        S.relSort = S.relSort.key === key ? { key: key, dir: -S.relSort.dir } : { key: key, dir: key === 'matches' ? -1 : 1 };
+        renderRel();
+      }
+      th.addEventListener('click', sortBy);
+      th.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sortBy(); } });
+    });
     $('matchSearch').addEventListener('input', function () { S.matchSearch = this.value; renderMatches(); });
     // Clear (×) buttons: shown while a search box has text; clearing runs the box's own input handler
     Array.prototype.forEach.call(document.querySelectorAll('.search-wrap'), function (w) {
@@ -1707,10 +2068,7 @@
       th.addEventListener('click', sortBy);
       th.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sortBy(); } });
     });
-    $('playersBody').addEventListener('change', function (e) {
-      var tr = e.target.closest('tr[data-i]'); if (!tr) return;
-      if (e.target.classList.contains('show')) { toggle(+tr.getAttribute('data-i'), e.target.checked); renderAll(); }
-    });
+    $('playersBody').addEventListener('click', toggleFromName);
     $('playersBody').addEventListener('input', function (e) {
       var tr = e.target.closest('tr[data-i]'), v = parseFloat(e.target.value);
       if (!tr || isNaN(v)) return;

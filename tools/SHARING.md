@@ -2,7 +2,7 @@
 
 The PTI History Explorer (`pti_interactive.html`) can open a ratings file and a matches file that only people with a password can read. The files are encrypted on your computer and uploaded to the `d/` folder next to the page. The page reads `d/` relative to its own address, so `/pti_interactive.html` reads `/d/` and `/staging/pti_interactive.html` reads `/staging/d/`. The page has no URLs or keys in it: the password gives both the file to fetch and the key that decrypts it.
 
-People open the data with **Alt+Shift+P** (Option+Shift+P on a Mac), or by double-clicking the small **v2.4** badge next to the page title. Both open a password box.
+People open the data with the **Password** button in the Data column, next to **Load sample data**. **Alt+Shift+P** (Option+Shift+P on a Mac) and a double-click on the small **v2.4** badge next to the page title also work. All three open a password box.
 
 ## What you need
 
