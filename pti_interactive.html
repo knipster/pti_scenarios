@@ -547,11 +547,13 @@
   function matchX() {
     if (S.xMode === 'index') return dateIndexX();
     if (S.xs) return S.xs;
-    var e = S.eng, v = new Float64Array(e.n), lastDay = null, n = 0;
-    for (var k = 0; k < e.n; k++) {
-      var d = e.day[k];
-      if (d === lastDay) n++; else { n = 0; lastDay = d; }
-      v[k] = d * DAY + n * DAY / 6;
+    // The spread stays inside the day however many matches it has, so a line never runs back in time
+    var e = S.eng, v = new Float64Array(e.n);
+    for (var k = 0; k < e.n;) {
+      var d = e.day[k], end = k;
+      while (end < e.n && e.day[end] === d) end++;
+      for (var q = k; q < end; q++) v[q] = d * DAY + 0.8 * DAY * (q - k) / (end - k);
+      k = end;
     }
     return (S.xs = v);
   }
