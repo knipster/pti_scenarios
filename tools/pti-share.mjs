@@ -61,6 +61,10 @@ function loadSecret() {
   if (!fs.existsSync(SECRET)) fail(SECRET + ' not found. Run init first (or pass --secret).');
   return JSON.parse(fs.readFileSync(SECRET, 'utf8'));
 }
+// Restricted pools (pti-pools.json) are handled by tools/pti_share.py and tools/pti_share_sync.py only
+function noPools(s, what) {
+  if (s.pools && Object.keys(s.pools).length) fail(`this secret has restricted pools, so ${what} needs tools/pti_share.py (or pti_share_sync.py for the data).`);
+}
 function saveSecret(s) { fs.writeFileSync(SECRET, JSON.stringify(s, null, 2) + '\n', { mode: 0o600 }); }
 function readCsv(f, what) {
   if (!f) fail('--' + what + ' <file> is required');
@@ -101,7 +105,9 @@ switch (cmd) {
     break;
   }
   case 'update': {
-    const s = loadSecret(), old = writeData(s, A.ratings, A.matches);
+    const s = loadSecret();
+    noPools(s, 'update');
+    const old = writeData(s, A.ratings, A.matches);
     saveSecret(s);
     console.log(`\nUpload the new files (existing passwords keep working):\n${UPLOAD}\n\nThen delete the old data files:\n${rm(old)}`);
     break;
@@ -121,6 +127,7 @@ switch (cmd) {
   }
   case 'remove-password': {
     const s = loadSecret();
+    noPools(s, 'remove-password');
     const file = A.label ? (s.passwords.find(p => p.label === A.label) || {}).file : A._[0] ? fromPassword(A._[0]).file : null;
     if (!file) fail('give --label <label> or the password');
     s.passwords = s.passwords.filter(p => p.file !== file);

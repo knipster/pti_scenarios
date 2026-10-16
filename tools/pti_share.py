@@ -14,12 +14,20 @@ the site's d/ folder.
     python3 tools/pti_share.py init --ratings ratings.csv --matches matches.csv
     python3 tools/pti_share.py add-password --label alice            (makes up a passphrase)
     python3 tools/pti_share.py add-password --label bob "my own passphrase"
+    python3 tools/pti_share.py add-password --label carol --pools NJWPTL-all,FCWPTL
+    python3 tools/pti_share.py grant --label alice --pools all      (every restricted pool)
+    python3 tools/pti_share.py revoke --label carol --pools FCWPTL
     python3 tools/pti_share.py list
     python3 tools/pti_share.py remove-password --label bob
     python3 tools/pti_share.py update --ratings ratings.csv --matches matches.csv
 
+Restricted pools (see tools/pti_pools.py) are defined in pti-pools.json next to
+the secret. A password unlocks the real names of the pools it is granted;
+tools/pti_share_sync.py does the masking.
+
 Options: --secret FILE (default pti-share-secret.json), --out DIR (default share-out),
---force (init over an existing secret).
+--force (init over an existing secret), --pools NAMES (comma-separated, or all),
+--pools-file FILE (default pti-pools.json next to the secret).
 Keep the secret file private and out of git: it holds the data key.
 Needs: pip install cryptography
 """
@@ -33,6 +41,9 @@ import os
 import secrets
 import sys
 import unicodedata
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pti_pools  # noqa: E402
 
 # Must match the constants in pti_interactive.html (SHARE) and tools/pti-share.mjs
 SALT, ITERATIONS, DIR = b'pti-share-v1', 600000, 'd'
@@ -126,6 +137,36 @@ class Share:
         return ('aws s3 cp {o}/{d} s3://{b}/{d} --recursive --acl public-read --content-type application/octet-stream '
                 '--cache-control "no-cache" --endpoint-url "$LINODE_S3_ENDPOINT"').format(o=self.out, d=DIR, b=BUCKET)
 
+    def config(self):
+        try:
+            return pti_pools.load_config(pti_pools.pools_path(self.secret, self.a.pools_file)) or {}
+        except ValueError as e:
+            fail(str(e))
+
+    # --pools: 'all', or names that pti-pools.json defines
+    def wanted(self, s):
+        if not self.a.pools:
+            fail('give --pools <names> (comma-separated) or --pools all')
+        if self.a.pools.strip() == 'all':
+            return 'all'
+        names = [n.strip() for n in self.a.pools.split(',') if n.strip()]
+        known = self.config()
+        bad = [n for n in names if n not in known]
+        if bad:
+            fail('no pool named {} in {}'.format(', '.join(bad), pti_pools.pools_path(self.secret, self.a.pools_file)))
+        for n in names:
+            pti_pools.ensure_pool(s, n)
+        return names
+
+    def write_key(self, s, pw):
+        self.write(pw['file'], seal(pti_pools.unb64(pw['wrap']), pti_pools.key_file(s, pw)))
+
+    def find(self, s):
+        x = next((x for x in s['passwords'] if x['label'] == self.a.label), None) if self.a.label else None
+        if not x:
+            fail('give --label <label> of an existing password (see list)')
+        return x
+
     def sync_cmd(self):
         here = os.path.dirname(sys.argv[0]) or '.'
         return 'python3 {} --keys-only --keys-from {} --secret {}'.format(os.path.join(here, 'pti_share_sync.py'), self.out, self.secret)
@@ -142,7 +183,7 @@ def passphrase():
 
 def main():
     p = argparse.ArgumentParser(description='Password-protected sharing for pti_interactive.html')
-    p.add_argument('cmd', choices=['init', 'update', 'add-password', 'remove-password', 'list'])
+    p.add_argument('cmd', choices=['init', 'update', 'add-password', 'remove-password', 'grant', 'revoke', 'list'])
     p.add_argument('password', nargs='?')
     p.add_argument('--ratings')
     p.add_argument('--matches')
@@ -150,6 +191,8 @@ def main():
     p.add_argument('--secret', default='pti-share-secret.json')
     p.add_argument('--out', default='share-out')
     p.add_argument('--force', action='store_true')
+    p.add_argument('--pools')
+    p.add_argument('--pools-file')
     # Older Pythons (before 3.13) don't match the password if it comes after the options
     a, extra = p.parse_known_args()
     if extra and not a.password and len(extra) == 1 and not extra[0].startswith('-'):
@@ -169,6 +212,10 @@ def main():
 
     elif a.cmd == 'update':
         s = sh.load()
+        if sh.config():
+            fail('this secret has restricted pools ({}), and update would publish the CSVs unmasked. '
+                 'Use tools/pti_share_sync.py, which masks restricted players.'.format(
+                     pti_pools.pools_path(a.secret, a.pools_file)))
         old = sh.write_data(s)
         sh.save(s)
         print('\nUpload the new files (existing passwords keep working):\n{}\n\nThen delete the old data files:\n{}'.format(sh.upload_cmd(), sh.rm_cmd(old)))
@@ -184,9 +231,13 @@ def main():
         file, key = from_password(pw)
         if any(x['file'] == file for x in s['passwords']):
             fail('that password is already in use')
-        sh.write(file, seal(key, js_json({'v': 1, 'key': s['dataKey'], 'm': s['manifest']})))
-        s['passwords'].append({'label': label, 'file': file, 'added': now()})
+        entry = {'label': label, 'file': file, 'added': now(), 'wrap': pti_pools.b64(key),
+                 'pools': sh.wanted(s) if a.pools else []}
+        sh.write_key(s, entry)
+        s['passwords'].append(entry)
         sh.save(s)
+        if entry['pools']:
+            print('Unlocks restricted pools: ' + (entry['pools'] if entry['pools'] == 'all' else ', '.join(entry['pools'])))
         print('Password for "{}": {}\n\nUpload:\n{}\n\nor, without the AWS CLI:\n{}'.format(label, pw, sh.upload_cmd(), sh.sync_cmd()))
 
     elif a.cmd == 'remove-password':
@@ -199,6 +250,10 @@ def main():
             file = None
         if not file:
             fail('give --label <label> or the password')
+        # Pool keys the removed password held get replaced on the next sync
+        for x in s['passwords']:
+            if x['file'] == file:
+                pti_pools.mark_rotation(s, pti_pools.granted(s, x))
         s['passwords'] = [x for x in s['passwords'] if x['file'] != file]
         sh.save(s)
         try:
@@ -207,9 +262,54 @@ def main():
             pass
         print('Removed. Delete its key file from the bucket:\n{}\n\nor, without the AWS CLI:\n{} --prune'.format(sh.rm_cmd([file]), sh.sync_cmd()))
 
+    elif a.cmd == 'grant':
+        s = sh.load()
+        x = sh.find(s)
+        if not x.get('wrap'):
+            # Made before pools existed: its key file can only be rewritten with the password
+            if not a.password:
+                fail('"{}" was made before restricted pools, so give its password once as well:\n'
+                     '  grant --label "{}" --pools ... "<password>"'.format(x['label'], x['label']))
+            file, key = from_password(a.password)
+            if file != x['file']:
+                fail('that is not the password for "{}"'.format(x['label']))
+            x['wrap'] = pti_pools.b64(key)
+        want = sh.wanted(s)
+        have = x.get('pools') or []
+        x['pools'] = 'all' if 'all' in (want, have) else sorted(set(have) | set(want))
+        sh.write_key(s, x)
+        sh.save(s)
+        print('"{}" now unlocks: {}\n\nUpload its key file:\n{}\n\nor, without the AWS CLI:\n{}'.format(
+            x['label'], x['pools'] if x['pools'] == 'all' else ', '.join(x['pools']), sh.upload_cmd(), sh.sync_cmd()))
+
+    elif a.cmd == 'revoke':
+        s = sh.load()
+        x = sh.find(s)
+        have = x.get('pools') or []
+        want = 'all' if (a.pools or '').strip() == 'all' else [n.strip() for n in (a.pools or '').split(',') if n.strip()]
+        if not want:
+            fail('give --pools <names> or --pools all')
+        if have == 'all' and want != 'all':
+            fail('"{}" has every pool. Revoke --pools all, then grant the ones it should keep.'.format(x['label']))
+        gone = pti_pools.granted(s, x) if want == 'all' else [n for n in want if n in have]
+        x['pools'] = [] if want == 'all' else [n for n in have if n not in want]
+        pti_pools.mark_rotation(s, gone)
+        if x.get('wrap'):
+            sh.write_key(s, x)
+        sh.save(s)
+        print('"{}" now unlocks: {}'.format(x['label'], ', '.join(x['pools']) or 'no restricted pools'))
+        if gone:
+            print('The next full run of pti_share_sync.py replaces the key of {} and re-sends every key file, '
+                  'so a copy of the old key stops working.'.format(', '.join(sorted(gone))))
+        print('\nUpload its key file:\n{}\n\nor, without the AWS CLI:\n{}'.format(sh.upload_cmd(), sh.sync_cmd()))
+
     elif a.cmd == 'list':
         s = sh.load()
-        print('\n'.join('{}\t{}\t{}/{}'.format(x['label'], x['added'][:10], DIR, x['file']) for x in s['passwords'])
+
+        def pools(x):
+            p = x.get('pools')
+            return 'all pools' if p == 'all' else ', '.join(p) if p else '-'
+        print('\n'.join('{}\t{}\t{}/{}\t{}'.format(x['label'], x['added'][:10], DIR, x['file'], pools(x)) for x in s['passwords'])
               if s['passwords'] else 'No passwords yet.')
 
 

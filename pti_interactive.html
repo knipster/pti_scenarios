@@ -381,7 +381,11 @@
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function isDark() { return document.documentElement.classList.contains('dark'); }
   function colorOf(i) { return PALETTE[isDark() ? 'dark' : 'light'][S.slot[i]]; }
-  function nameOf(i) { return i >= 0 && S.players[i] ? S.players[i].name : '?'; }
+  // Restricted players keep their placeholder id everywhere (views, links, downloads); a
+  // password that unlocks their pool only swaps in the real name for display.
+  function nameOf(i) { var p = i >= 0 && S.players[i]; return p ? p.name + (p.locked ? ' 🔒' : '') : '?'; }
+  var LOCK_TIP = 'Placeholder name: this player is in a restricted pool your password does not unlock';
+  function lockBadge(p) { return p.locked ? ' <span class="badge" title="' + LOCK_TIP + '">🔒</span>' : ''; }
   function nameOfId(id) { var i = S.eng && S.eng.index.get(String(id)); return i === undefined ? String(id) : nameOf(i); }
   function fmt(v, d) { return v == null || isNaN(v) ? '–' : (+v).toFixed(d == null ? 2 : d); }
   function num(n) { return n.toLocaleString('en-US'); }
@@ -473,7 +477,13 @@
       var pid = id[r], a = parseFloat(pti[r]), b = parseFloat(sigma[r]);
       if (!pid || isNaN(a) || isNaN(b) || seen.has(pid)) { bad++; continue; }
       seen.add(pid);
-      out.push({ id: pid, name: (name && name[r]) || pid, pti: a, sigma: b, lastPlayed: (last && last[r]) || null });
+      var row = { id: pid, name: (name && name[r]) || pid, pti: a, sigma: b, lastPlayed: (last && last[r]) || null };
+      if (/^x-/.test(pid)) {
+        var real = S.reveal && S.reveal[pid];
+        row.placeholder = row.name;
+        if (real) { row.realId = real[0]; row.name = real[1] || real[0]; } else row.locked = true;
+      }
+      out.push(row);
     }
     if (!out.length) throw new Error('No usable rows in the ratings CSV.');
     return { rows: out, bad: bad };
@@ -509,6 +519,9 @@
         S.orig = { pti: S.eng.endPti.slice(), sigma: S.eng.endSigma.slice(), init: S.eng.initPti.slice() };
         S.overrides = []; S.selected = []; S.slot = {}; S.sortOrder = null; S.xs = null; S.excluded = []; S.groups = {}; S.hiddenLines = new Set();
         S.ratingsText = S.matchesText = null;  // free the raw text
+        var locked = 0, unlocked = 0;
+        S.players.forEach(function (p) { if (p.locked) locked++; else if (p.realId) unlocked++; });
+        var pools = S.unlocked || []; S.reveal = S.unlocked = null;
         // Show the most active players first
         var top = [];
         for (var i = 0; i < S.eng.np; i++) {
@@ -519,7 +532,9 @@
         var unrated = 0; for (var k = 0; k < S.eng.n; k++) if (!S.eng.rated(k)) unrated++;
         setStatus(num(S.players.length) + ' players and ' + num(S.eng.n) + ' matches loaded in ' + secs(performance.now() - t0) +
           ' (reading ' + secs(t1 - t0) + ', indexing ' + secs(t2 - t1) + ', rating ' + secs(run.ms) + ')' +
-          (r.bad ? '. ' + num(r.bad) + ' rating rows skipped' : '') + (unrated ? '. ' + num(unrated) + ' matches could not be rated' : '') + '.', false);
+          (r.bad ? '. ' + num(r.bad) + ' rating rows skipped' : '') + (unrated ? '. ' + num(unrated) + ' matches could not be rated' : '') + '.' +
+          (unlocked ? ' Real names shown for ' + num(unlocked) + ' restricted players (' + pools.join(', ') + ').' : '') +
+          (locked ? ' ' + num(locked) + ' restricted players have placeholder names (🔒).' : ''), false);
         setPerf(null);
         renderAll();
         setDataOpen(false);  // data is in: give the room to the chart
@@ -935,7 +950,7 @@
     var order = sortedPlayers(), rows = [], matched = 0;
     for (var j = 0; j < order.length; j++) {
       var p = S.players[order[j]];
-      if (q && p.id.toLowerCase().indexOf(q) < 0 && p.name.toLowerCase().indexOf(q) < 0) continue;
+      if (q && p.id.toLowerCase().indexOf(q) < 0 && p.name.toLowerCase().indexOf(q) < 0 && !(p.realId && p.realId.toLowerCase().indexOf(q) >= 0)) continue;
       matched++;
       if (rows.length < MAX_TABLE_ROWS) rows.push(order[j]);
     }
@@ -947,7 +962,7 @@
       var off = merged ? ' disabled title="Not used while linked to ' + esc(nameOf(r)) + '"' : '';
       return '<tr data-i="' + i + '"' + (merged ? ' class="merged"' : '') + '>' +
         '<td><input type="checkbox" class="show accent-indigo-600"' + (shown ? ' checked' : '') + (merged ? off : !shown && full ? ' disabled title="Up to 8 players at a time"' : '') + '></td>' +
-        '<td>' + (shown ? '<span class="chip" style="background:' + colorOf(i) + '"></span> ' : '') + esc(p.name) + (p.name !== p.id ? ' <span class="muted">' + esc(p.id) + '</span>' : '') + tag + '</td>' +
+        '<td>' + (shown ? '<span class="chip" style="background:' + colorOf(i) + '"></span> ' : '') + esc(p.name) + lockBadge(p) + (p.name !== p.id ? ' <span class="muted">' + esc(p.realId || p.id) + '</span>' : '') + tag + '</td>' +
         '<td class="num">' + num(e.count[i]) + '</td>' +
         '<td class="num"><input type="number" step="0.01" class="field field-sm start-pti" value="' + fmt(e.initPti[i]) + '"' + off + '></td>' +
         '<td class="num"><input type="number" step="0.01" min="0.01" class="field field-sm start-sigma" value="' + fmt(e.initSigma[i]) + '"' + off + '></td>' +
@@ -1379,7 +1394,7 @@
   }
   function downloadStarts() {
     var e = S.eng; if (!e) return;
-    var lines = S.players.map(function (p, i) { return [p.id, p.name, e.initPti[i], e.initSigma[i], p.lastPlayed || ''].map(csvCell).join(','); });
+    var lines = S.players.map(function (p, i) { return [p.id, p.placeholder || p.name, e.initPti[i], e.initSigma[i], p.lastPlayed || ''].map(csvCell).join(','); });
     download('pti-starting-ratings.csv', ['id,name,pti,sigma,lastPlayed\n' + lines.join('\n') + '\n']);
   }
 
@@ -1441,7 +1456,7 @@
   }
   var WRONG = "That password didn't work.";
   function openShared(pass) {
-    var C, dataKey;
+    var C, dataKey, poolKeys;
     pass = pass.normalize('NFKC').trim();
     return getShareCrypto().then(function (c) { C = c; return C.derive(pass); }).then(function (bits) {
       var keyName = hex(bits.subarray(0, 16)), wrap = bits.subarray(16);
@@ -1450,16 +1465,28 @@
       });
     }).then(function (plain) {
       var k = JSON.parse(new TextDecoder().decode(plain));
-      dataKey = Uint8Array.from(atob(k.key), function (ch) { return ch.charCodeAt(0); });
+      dataKey = bytes64(k.key); poolKeys = k.pools || {};
       shareMsg('Downloading…');
       return fetchBytes(k.m, 'The shared data is missing.').then(function (b) { return C.open(dataKey, b); });
     }).then(function (plain) {
       var m = JSON.parse(new TextDecoder().decode(plain));
-      return Promise.all([m.ratings, m.matches].map(function (n) {
+      var csvs = Promise.all([m.ratings, m.matches].map(function (n) {
         return fetchBytes(n, 'The shared data is missing.').then(function (b) { return C.open(dataKey, b); }).then(gunzipText);
       }));
+      // Real names of the restricted pools this password unlocks: { placeholder id: [real id, real name] }
+      var mine = Object.keys(m.pools || {}).filter(function (n) { return poolKeys[n]; });
+      var lists = Promise.all(mine.map(function (n) {
+        return fetchBytes(m.pools[n], '').then(function (b) { return C.open(bytes64(poolKeys[n]), b); }).then(gunzipText)
+          .then(JSON.parse).catch(function () { return null; });  // a pool that fails to open stays masked
+      }));
+      return Promise.all([csvs, lists]).then(function (r) {
+        var reveal = {}, opened = [];
+        r[1].forEach(function (l, j) { if (l) { opened.push(mine[j]); for (var id in l) reveal[id] = l[id]; } });
+        return [r[0][0], r[0][1], reveal, opened];
+      });
     });
   }
+  function bytes64(s) { return Uint8Array.from(atob(s), function (ch) { return ch.charCodeAt(0); }); }
   function shareMsg(t, bad) { var el = $('shareMsg'); el.textContent = t; el.style.color = bad ? '#f43f5e' : ''; }
   function showShare() {
     var d = $('shareDlg');
@@ -1481,7 +1508,7 @@
       $('shareGo').disabled = true; shareMsg('Checking…');
       openShared(pass).then(function (t) {
         $('shareDlg').close();
-        S.ratingsText = t[0]; S.matchesText = t[1];
+        S.ratingsText = t[0]; S.matchesText = t[1]; S.reveal = t[2]; S.unlocked = t[3];
         tryBuild();
       }).catch(function (err) {
         shareMsg(err && /^[A-Z]/.test(err.message) ? err.message : WRONG, true);
