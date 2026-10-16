@@ -101,6 +101,53 @@ python3 /path/to/pti_scenarios/tools/pti_share_sync.py --out staging --upload-ke
 
 When you add or remove a password, run the `--keys-only` command once for each folder, with and without `--out staging`. Refreshing one folder never touches the other's files.
 
+## Restricted player pools
+
+Some leagues don't want their players' ratings visible to everyone with a password. A restricted pool is a group of players who appear in the shared data under a placeholder, such as "Avery H." with a 🔒 next to it in the explorer, and a placeholder id starting with `x-`. A password granted that pool shows their real names and ids instead. Ratings and matches stay in the data either way; only who the players are is hidden.
+
+### Set up the pools
+
+Copy `tools/pti-pools.example.json` to `pti-pools.json` in the folder that holds `pti-share-secret.json`, and edit it:
+
+- `leagues`: the league ids in the pool.
+- `rule`: `"only"` takes players whose every match is in those leagues; `"ever"` takes anyone with at least one match in them. Both are worked out over the whole MotherDuck table, not just the dates being exported.
+- `names`: `"female"`, `"male"` or `"any"`, the first names placeholders are drawn from.
+- `include` and `exclude`: player ids to add to or leave out of the pool by hand.
+
+Keep `pti-pools.json` private and out of git (`.gitignore` already skips it), since the exception lists name players.
+
+Once shared data is open, the explorer shows a chip per pool next to the v2.4 badge: 🔓 for pools the password unlocks, 🔒 for the rest. Every password holder sees the pool names this way.
+
+A player in any pool gets a placeholder. Each pool's key shows exactly its own players, so a player in two pools shows to a password holding either one. Placeholder names never share a first name and last initial with any real player in the table.
+
+Every sync picks new placeholders, so "Avery H." in one refresh is someone else, or nobody, in the next. Nobody can follow a restricted player across refreshes. The cost is that anything saved with a placeholder id stops matching after the next sync: a shared view link drops those players and their matches (the page says how many items it skipped), and a downloaded starting-ratings CSV won't line up for them. Players with real ids aren't affected.
+
+### Give passwords access
+
+```sh
+python3 /path/to/pti_scenarios/tools/pti_share.py add-password --label alice --pools all
+python3 /path/to/pti_scenarios/tools/pti_share.py add-password --label bob --pools NJWPTL-only
+python3 /path/to/pti_scenarios/tools/pti_share.py grant --label bob --pools FCWPTL
+python3 /path/to/pti_scenarios/tools/pti_share.py revoke --label bob --pools FCWPTL
+python3 /path/to/pti_scenarios/tools/pti_share.py list
+```
+
+- `--pools all` covers every pool, including ones added later.
+- Passwords without `--pools` see placeholders for every restricted player.
+- Passwords made before pools existed need their passphrase once to be granted a pool: `grant --label dave --pools FCWPTL "dave's passphrase"`.
+- After `add-password`, `grant` or `revoke`, upload the key files as usual, or run `pti_share_sync.py --keys-only`.
+
+When a password loses a pool (`revoke`, or `remove-password` on a password that had pools), the next full sync replaces that pool's key and re-sends every key file, so someone who kept a copy of the old key can't open the new data.
+
+### Refresh with pools
+
+`pti_share_sync.py` reads `pti-pools.json` next to the secret and masks the restricted players in both CSVs before encrypting them. It prints how many players each pool masked. `--keep-csv` saves the masked CSVs.
+
+- `--pools other.json` uses another pools file.
+- `--pools none`, or an empty or missing `pti-pools.json`, masks nobody: the CSVs are the same as before pools existed.
+- To add or remove a pool, edit `pti-pools.json` and run the sync. Removing a pool shows its players' real names to everyone, unless another pool still covers them.
+- `pti_share.py update` refuses to run while pools are set up, since it would publish the CSVs unmasked. The Node `pti-share.mjs` doesn't know about pools, so use the Python tools for this.
+
 ## Good to know
 
 - Anyone with a passphrase can pass it on, or save the data once it's open. Cutting someone off only stops new downloads.

@@ -1,0 +1,8 @@
+{
+  "v": 1,
+  "pools": {
+    "NJWPTL-only": {"label": "NJWPTL, played only in NJWPTL", "leagues": ["517"], "rule": "only", "names": "female", "include": [], "exclude": []},
+    "NJWPTL-all": {"label": "NJWPTL, everyone who played in it", "leagues": ["517"], "rule": "ever", "names": "female", "include": [], "exclude": []},
+    "FCWPTL": {"label": "FCWPTL, played only in FCWPTL", "leagues": ["206"], "rule": "only", "names": "female", "include": [], "exclude": []}
+  }
+}

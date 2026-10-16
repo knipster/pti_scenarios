@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Time Decay Calculator</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN for Sigmoid Curve Visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome Icons CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        /* Custom scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+  <!-- Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-VJ88QLQFCL"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-VJ88QLQFCL');
+  </script>
+  <!-- GoatCounter -->
+  <script data-goatcounter="https://analytics.dlmk.org/count"
+          async src="//analytics.dlmk.org/count.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen py-8 px-4 sm:px-6 lg:px-8 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/30 via-slate-900 to-slate-950">
+    <div class="max-w-5xl mx-auto space-y-6">
+        
+        <!-- Header Section -->
+        <header class="text-center space-y-2">
+            <div class="inline-flex items-center justify-center p-3 bg-indigo-500/10 text-indigo-400 rounded-2xl mb-1 border border-indigo-500/20 shadow-inner">
+                <i class="fa-solid fa-calculator text-2xl"></i>
+            </div>
+            <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">Time Decay Calculator</h1>
+            <p class="text-slate-400 max-w-xl mx-auto text-sm sm:text-base">
+                Calculate bounded sigmoidal time decay using calibrated model parameters.
+            </p>
+        </header>
+
+        <!-- Main Grid Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Left Column: Inputs & Presets -->
+            <div class="lg:col-span-5 space-y-6">
+                
+                <div class="bg-slate-800/80 backdrop-blur-md rounded-2xl border border-slate-700/60 p-6 space-y-5 shadow-xl">
+                    <h2 class="text-lg font-semibold text-white flex items-center justify-between border-b border-slate-700/50 pb-3">
+                        <span class="flex items-center gap-2">
+                            <i class="fa-solid fa-sliders text-indigo-400"></i> Inputs
+                        </span>
+                        <span class="text-xs font-normal text-slate-400 bg-slate-700/50 px-2.5 py-1 rounded-full">Real-time</span>
+                    </h2>
+
+                    <!-- Presets -->
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">Quick Presets</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="applyPreset(3.5, 50)" class="px-3 py-2 text-xs font-medium bg-slate-700/50 hover:bg-indigo-600/20 hover:text-indigo-300 hover:border-indigo-500/40 text-slate-300 rounded-xl border border-slate-600/40 transition-all text-left flex flex-col">
+                                <span class="font-semibold text-white">Short Break</span>
+                                <span class="text-[11px] text-slate-400">σ: 3.5 | Break: 50d</span>
+                            </button>
+                            <button onclick="applyPreset(3.5, 200)" class="px-3 py-2 text-xs font-medium bg-slate-700/50 hover:bg-indigo-600/20 hover:text-indigo-300 hover:border-indigo-500/40 text-slate-300 rounded-xl border border-slate-600/40 transition-all text-left flex flex-col">
+                                <span class="font-semibold text-white">Medium Break</span>
+                                <span class="text-[11px] text-slate-400">σ: 3.5 | Break: 200d</span>
+                            </button>
+                            <button onclick="applyPreset(3.5, 500)" class="px-3 py-2 text-xs font-medium bg-slate-700/50 hover:bg-indigo-600/20 hover:text-indigo-300 hover:border-indigo-500/40 text-slate-300 rounded-xl border border-slate-600/40 transition-all text-left flex flex-col">
+                                <span class="font-semibold text-white">Long Break</span>
+                                <span class="text-[11px] text-slate-400">σ: 3.5 | Break: 500d</span>
+                            </button>
+                            <button onclick="applyPreset(4.8, 300)" class="px-3 py-2 text-xs font-medium bg-slate-700/50 hover:bg-indigo-600/20 hover:text-indigo-300 hover:border-indigo-500/40 text-slate-300 rounded-xl border border-slate-600/40 transition-all text-left flex flex-col">
+                                <span class="font-semibold text-white">High Sigma</span>
+                                <span class="text-[11px] text-slate-400">σ: 4.8 | Break: 300d</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <hr class="border-slate-700/60">
+
+                    <!-- Primary Inputs -->
+                    <div class="space-y-4">
+                        <!-- Input 1: Sigma -->
+                        <div>
+                            <div class="flex justify-between items-center mb-1.5">
+                                <label for="sigma" class="block text-sm font-medium text-slate-200">
+                                    Sigma (<span class="font-serif italic text-indigo-300">&sigma;</span>)
+                                </label>
+                                <span class="text-xs text-indigo-400 font-mono font-medium" id="sigmaDisplayVal">3.50</span>
+                            </div>
+                            <div class="relative rounded-xl shadow-sm">
+                                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                                    <i class="fa-solid fa-chart-line text-sm"></i>
+                                </div>
+                                <input type="number" step="0.01" id="sigma" value="3.5" class="block w-full pl-10 pr-3 py-2.5 text-white bg-slate-900/80 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-mono transition-all" placeholder="Enter Sigma value">
+                            </div>
+                            <p class="mt-1 text-xs text-slate-400">Base value metric before adjustment.</p>
+                        </div>
+
+                        <!-- Input 2: Break Days -->
+                        <div>
+                            <div class="flex justify-between items-center mb-1.5">
+                                <label for="break_days" class="block text-sm font-medium text-slate-200">
+                                    Break Days (<span class="font-serif italic text-indigo-300">break_days</span>)
+                                </label>
+                                <span class="text-xs text-indigo-400 font-mono font-medium" id="breakDaysDisplayVal">200 days</span>
+                            </div>
+                            <div class="relative rounded-xl shadow-sm">
+                                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                                    <i class="fa-regular fa-calendar-days text-sm"></i>
+                                </div>
+                                <input type="number" step="1" min="0" id="break_days" value="200" class="block w-full pl-10 pr-3 py-2.5 text-white bg-slate-900/80 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-mono transition-all" placeholder="Enter break duration in days">
+                            </div>
+                            <p class="mt-1 text-xs text-slate-400">Duration of pause or break in days.</p>
+                        </div>
+                    </div>
+
+                    <!-- Constant Parameters Card -->
+                    <div class="bg-slate-900/60 p-3.5 rounded-xl border border-slate-700/50 space-y-2 text-xs">
+                        <div class="font-semibold text-slate-300 flex items-center justify-between">
+                            <span class="flex items-center gap-1.5">
+                                <i class="fa-solid fa-lock text-indigo-400"></i> Fixed Model Constants
+                            </span>
+                            <span class="text-[10px] text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">Hardcoded</span>
+                        </div>
+                        <div class="grid grid-cols-1 gap-1.5 font-mono text-[11px] text-slate-400">
+                            <div class="flex justify-between">
+                                <span>timerate</span>
+                                <span class="text-slate-200">0.013214883335727136</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>timescale</span>
+                                <span class="text-slate-200">0.7170782493781991</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>timeshift</span>
+                                <span class="text-slate-200">435.6036467141399</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>max_cap</span>
+                                <span class="text-amber-400">5.328067859319834</span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- Right Column: Output, Breakdown & Chart -->
+            <div class="lg:col-span-7 space-y-6">
+                
+                <!-- Main Result Display Card -->
+                <div class="bg-slate-800/80 backdrop-blur-md rounded-2xl border border-slate-700/60 p-6 relative overflow-hidden shadow-xl">
+                    <div class="absolute top-0 right-0 -mt-6 -mr-6 w-36 h-36 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none"></div>
+                    
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <span class="text-xs font-semibold text-indigo-400 uppercase tracking-wider bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 rounded-md">
+                                Output Value
+                            </span>
+                            <h3 class="text-2xl font-bold text-white mt-2">TimeDecay Result</h3>
+                        </div>
+
+                        <!-- Main Big Number Display -->
+                        <div class="flex items-center gap-3">
+                            <div class="text-right">
+                                <div id="timeDecayResult" class="text-3xl sm:text-4xl font-extrabold text-indigo-400 font-mono tracking-tight">--</div>
+                                <div id="capNotice" class="text-[11px] text-amber-400 font-medium hidden flex items-center justify-end gap-1 mt-1">
+                                    <i class="fa-solid fa-triangle-exclamation"></i> Upper Bound Cap Reached (5.328068)
+                                </div>
+                            </div>
+                            <button onclick="copyToClipboard()" id="copyBtn" class="p-3 text-slate-400 hover:text-white bg-slate-700/60 hover:bg-indigo-600/40 rounded-xl transition-all border border-slate-600/50" title="Copy Result">
+                                <i class="fa-regular fa-copy text-lg"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step-by-Step Mathematical Breakdown -->
+                    <div class="mt-6 pt-5 border-t border-slate-700/60">
+                        <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
+                            <i class="fa-solid fa-square-root-variable text-indigo-400"></i> Intermediate Calculation Steps
+                        </h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/50">
+                                <span class="text-slate-400 block mb-0.5">Shifted Days <code class="text-slate-300 font-mono">(break_days - timeshift)</code></span>
+                                <span id="stepShiftedDays" class="font-mono font-semibold text-slate-200 text-sm">--</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/50">
+                                <span class="text-slate-400 block mb-0.5">Sigmoid Exponent <code class="text-slate-300 font-mono">e^(-timerate * diff)</code></span>
+                                <span id="stepExponent" class="font-mono font-semibold text-slate-200 text-sm">--</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/50">
+                                <span class="text-slate-400 block mb-0.5">Sigma Adjustment <code class="text-indigo-300 font-mono">sigma_adjust</code></span>
+                                <span id="stepSigmaAdjust" class="font-mono font-semibold text-indigo-400 text-sm">--</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/50">
+                                <span class="text-slate-400 block mb-0.5">Uncapped Value <code class="text-slate-300 font-mono">sigma + sigma_adjust</code></span>
+                                <span id="stepRawSum" class="font-mono font-semibold text-slate-200 text-sm">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Interactive Chart Visualization -->
+                <div class="bg-slate-800/80 backdrop-blur-md rounded-2xl border border-slate-700/60 p-6 space-y-4 shadow-xl">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-base font-semibold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-chart-area text-indigo-400"></i> TimeDecay vs. Break Days Curve
+                        </h3>
+                        <span class="text-xs text-slate-400">Current &sigma; = <span id="chartSigmaDisplay" class="text-indigo-300 font-mono">3.5</span></span>
+                    </div>
+
+                    <div class="relative h-64 w-full">
+                        <canvas id="timeDecayChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Code / Formula Reference -->
+                <div class="bg-slate-900/90 text-slate-300 rounded-2xl p-5 text-xs space-y-2 border border-slate-800">
+                    <div class="flex items-center gap-2 text-indigo-400 font-semibold">
+                        <i class="fa-solid fa-code"></i> Implemented JavaScript Function
+                    </div>
+                    <pre class="font-mono bg-slate-950 p-3 rounded-xl text-indigo-300 border border-slate-800 overflow-x-auto text-[11px] leading-relaxed">
+function time_decay(sigma, break_days) {
+    var timerate = 0.013214883335727136;
+    var timescale = 0.7170782493781991;
+    var timeshift = 435.6036467141399;
+    var sigma_adjust = timescale / (1 + Math.exp(-timerate * (break_days - timeshift)));
+    return Math.min(sigma + sigma_adjust, 5.328067859319834);
+}</pre>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- Notification Toast -->
+        <div id="toast" class="fixed bottom-5 right-5 bg-slate-800 border border-slate-700 text-white px-4 py-2.5 rounded-xl shadow-2xl text-sm flex items-center gap-2 transition-all transform translate-y-20 opacity-0 pointer-events-none z-50">
+            <i class="fa-solid fa-circle-check text-emerald-400"></i>
+            <span id="toastMessage">Copied to clipboard!</span>
+        </div>
+
+    </div>
+
+    <script>
+        // Constants
+        const CAP_BOUND = 5.328067859319834;
+
+        // DOM Elements
+        const sigmaInput = document.getElementById('sigma');
+        const breakDaysInput = document.getElementById('break_days');
+        const sigmaDisplayVal = document.getElementById('sigmaDisplayVal');
+        const breakDaysDisplayVal = document.getElementById('breakDaysDisplayVal');
+        const chartSigmaDisplay = document.getElementById('chartSigmaDisplay');
+
+        const timeDecayResult = document.getElementById('timeDecayResult');
+        const capNotice = document.getElementById('capNotice');
+
+        const stepShiftedDays = document.getElementById('stepShiftedDays');
+        const stepExponent = document.getElementById('stepExponent');
+        const stepSigmaAdjust = document.getElementById('stepSigmaAdjust');
+        const stepRawSum = document.getElementById('stepRawSum');
+
+        let timeDecayChart = null;
+
+        // Exact Formula Function
+        function time_decay(sigma, break_days) {
+            var timerate = 0.013214883335727136;
+            var timescale = 0.7170782493781991;
+            var timeshift = 435.6036467141399;
+            var sigma_adjust = timescale / (1 + Math.exp(-timerate * (break_days - timeshift)));
+            return Math.min(sigma + sigma_adjust, 5.328067859319834);
+        }
+
+        // Detailed Calculation with Intermediate Variables
+        function calculateDetailed(sigma, breakDays) {
+            const timerate = 0.013214883335727136;
+            const timescale = 0.7170782493781991;
+            const timeshift = 435.6036467141399;
+
+            const diff = breakDays - timeshift;
+            const expVal = Math.exp(-timerate * diff);
+            const sigma_adjust = timescale / (1 + expVal);
+            const rawSum = sigma + sigma_adjust;
+            const finalVal = Math.min(rawSum, CAP_BOUND);
+            const isCapped = rawSum >= CAP_BOUND;
+
+            return {
+                sigma,
+                breakDays,
+                diff,
+                expVal,
+                sigma_adjust,
+                rawSum,
+                finalVal,
+                isCapped
+            };
+        }
+
+        // Apply Quick Preset
+        function applyPreset(sigmaVal, breakDaysVal) {
+            sigmaInput.value = sigmaVal;
+            breakDaysInput.value = breakDaysVal;
+            updateCalculation();
+        }
+
+        // Copy Result to Clipboard
+        function copyToClipboard() {
+            const val = timeDecayResult.innerText;
+            if (!val || val === '--') return;
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(val);
+            } else {
+                const textArea = document.createElement("textarea");
+                textArea.value = val;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+            }
+
+            showToast('Result copied to clipboard!');
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            toastMessage.innerText = msg;
+            toast.classList.remove('translate-y-20', 'opacity-0', 'pointer-events-none');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0', 'pointer-events-none');
+            }, 2500);
+        }
+
+        // Initialize Chart.js
+        function initChart() {
+            const ctx = document.getElementById('timeDecayChart').getContext('2d');
+            
+            timeDecayChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'TimeDecay Curve',
+                            data: [],
+                            borderColor: '#818cf8',
+                            backgroundColor: 'rgba(99, 102, 241, 0.12)',
+                            fill: true,
+                            borderWidth: 2.5,
+                            tension: 0.35,
+                            pointRadius: 0
+                        },
+                        {
+                            label: 'Max Limit Cap (5.328)',
+                            data: [],
+                            borderColor: '#f59e0b',
+                            borderWidth: 1.5,
+                            borderDash: [5, 5],
+                            pointRadius: 0,
+                            fill: false
+                        },
+                        {
+                            label: 'Current Input Point',
+                            data: [],
+                            borderColor: '#38bdf8',
+                            backgroundColor: '#38bdf8',
+                            pointRadius: 6,
+                            pointHoverRadius: 8,
+                            showLine: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'nearest',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                boxWidth: 12,
+                                color: '#94a3b8',
+                                font: { size: 11, family: 'Inter' }
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: '#0f172a',
+                            borderColor: '#334155',
+                            borderWidth: 1,
+                            titleFont: { family: 'JetBrains Mono', size: 12 },
+                            bodyFont: { family: 'JetBrains Mono', size: 11 },
+                            padding: 10,
+                            displayColors: false,
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: ${context.parsed.y.toFixed(6)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Break Days', color: '#94a3b8', font: { size: 11, family: 'Inter' } },
+                            ticks: { color: '#64748b', font: { family: 'JetBrains Mono', size: 10 } },
+                            grid: { color: 'rgba(51, 65, 85, 0.4)' }
+                        },
+                        y: {
+                            title: { display: true, text: 'TimeDecay', color: '#94a3b8', font: { size: 11, family: 'Inter' } },
+                            ticks: { color: '#64748b', font: { family: 'JetBrains Mono', size: 10 } },
+                            grid: { color: 'rgba(51, 65, 85, 0.4)' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update Chart Data dynamically
+        function updateChart(sigma, currentBreakDays, currentFinalVal) {
+            if (!timeDecayChart) return;
+
+            const labels = [];
+            const curveData = [];
+            const capData = [];
+            const currentPointData = [];
+
+            // Dynamic X-axis range based on break days input
+            const maxDays = Math.max(800, Math.ceil(currentBreakDays * 1.5));
+            const stepsCount = 60;
+            const step = maxDays / stepsCount;
+
+            for (let i = 0; i <= stepsCount; i++) {
+                const d = Math.round(i * step);
+                labels.push(d);
+                const val = time_decay(sigma, d);
+                curveData.push(val);
+                capData.push(CAP_BOUND);
+
+                // Add point marker at closest x-index
+                if (Math.abs(d - currentBreakDays) < step / 2) {
+                    currentPointData.push({ x: d, y: currentFinalVal });
+                } else {
+                    currentPointData.push(null);
+                }
+            }
+
+            timeDecayChart.data.labels = labels;
+            timeDecayChart.data.datasets[0].data = curveData;
+            timeDecayChart.data.datasets[1].data = capData;
+            timeDecayChart.data.datasets[2].data = currentPointData;
+            timeDecayChart.update('none');
+        }
+
+        // Main Calculation Trigger
+        function updateCalculation() {
+            const sigma = parseFloat(sigmaInput.value) || 0;
+            const breakDays = parseFloat(breakDaysInput.value) || 0;
+
+            // Header labels
+            sigmaDisplayVal.innerText = sigma.toFixed(2);
+            breakDaysDisplayVal.innerText = `${breakDays} ${breakDays === 1 ? 'day' : 'days'}`;
+            chartSigmaDisplay.innerText = sigma.toFixed(2);
+
+            // Detailed calculation
+            const details = calculateDetailed(sigma, breakDays);
+
+            // Result display
+            timeDecayResult.innerText = details.finalVal.toFixed(6);
+
+            if (details.isCapped) {
+                capNotice.classList.remove('hidden');
+            } else {
+                capNotice.classList.add('hidden');
+            }
+
+            // Intermediate steps breakdown
+            stepShiftedDays.innerText = details.diff.toFixed(4);
+            stepExponent.innerText = details.expVal.toExponential(4);
+            stepSigmaAdjust.innerText = `+${details.sigma_adjust.toFixed(6)}`;
+            stepRawSum.innerText = `${details.rawSum.toFixed(6)}`;
+
+            // Chart update
+            updateChart(sigma, breakDays, details.finalVal);
+        }
+
+        // Event Listeners
+        [sigmaInput, breakDaysInput].forEach(elem => {
+            elem.addEventListener('input', updateCalculation);
+        });
+
+        // Initialize App on Window Load
+        window.onload = function() {
+            initChart();
+            updateCalculation();
+        };
+    </script>
+</body>
+</html>

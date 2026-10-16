@@ -15,6 +15,13 @@ keeps working, and only the two data files and the manifest change.
     python3 tools/pti_share_sync.py --secret ~/pti-share/pti-share-secret.json
     python3 tools/pti_share_sync.py --out staging --upload-keys   # a copy for /staging/, keys too
     python3 tools/pti_share_sync.py --keys-only --prune           # after add- or remove-password
+    python3 tools/pti_share_sync.py --pools none                  # nothing masked, even with a pti-pools.json
+
+Restricted pools: if pti-pools.json (next to the secret, or --pools FILE) defines
+pools, their players get placeholder ids and names in both CSVs, and each pool's
+real ids and names go in a file encrypted with that pool's key (see
+tools/pti_pools.py). Pool keys a removed or revoked password held are replaced
+here, and every key file is then re-sent.
 
 Options:
     --secret FILE     pti-share secret (default pti-share-secret.json)
@@ -25,11 +32,14 @@ Options:
     --upload-keys     also upload the password key files, from KEYS/d/
     --keys-from KEYS  folder pti_share.py wrote to (its --out, default share-out)
     --keys-only       just upload the key files; no export, data left as it is
+    --pools FILE      restricted pools (default pti-pools.json next to the
+                      secret); "none" masks nobody
     --prune           delete files in FOLDER/d/ that the secret no longer lists,
                       such as the key file of a removed password
     --from / --to     optional date range (YYYY-MM-DD, inclusive, US Eastern)
     --dry-run         query and encrypt, report sizes, upload nothing, change nothing
-    --keep-csv DIR    also save the plain CSVs in DIR (keep them private)
+    --keep-csv DIR    also save the CSVs in DIR as uploaded, so with restricted
+                      players masked (keep them private all the same)
     --database NAME   database to read (default md:, i.e. MotherDuck); a local
                       .duckdb file works too, for testing
 
@@ -46,6 +56,9 @@ import secrets
 import sys
 import tempfile
 from base64 import b64decode
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pti_pools  # noqa: E402
 
 # Must match tools/pti_share.py, tools/pti-share.mjs and SHARE in pti_interactive.html
 DIR = 'd'
@@ -114,7 +127,20 @@ def with_f(a):
     return f'WITH b AS ({BASE}),\n  f AS (SELECT * FROM b WHERE {where})'
 
 
-def export(a, tmp):
+# Pool membership and real names come from the whole table, not just the exported date range
+LEAGUES = '''
+  SELECT decode(p) AS id, list(DISTINCT coalesce(decode(LeagueID), '')) AS leagues
+  FROM "apta2"."main"."matches_unified", UNNEST([Player1HID, Player2HID, Player1AID, Player2AID]) AS t(p)
+  WHERE p IS NOT NULL GROUP BY 1
+'''
+NAMES = '''
+  SELECT DISTINCT decode(n) AS name
+  FROM "apta2"."main"."matches_unified", UNNEST([Player1HName, Player2HName, Player1AName, Player2AName]) AS t(n)
+  WHERE n IS NOT NULL
+'''
+
+
+def export(a, tmp, pools):
     import duckdb
     if a.database.startswith('md:') and not os.environ.get('MOTHERDUCK_TOKEN'):
         fail('set MOTHERDUCK_TOKEN')
@@ -125,8 +151,71 @@ def export(a, tmp):
         rel = con.sql(with_f(a) + '\n' + tail)
         rel.write_csv(path, header=True)
         out[name] = (path, rel.shape[0])
+    extra = None
+    if pools:
+        extra = ({pid: set(lgs) for pid, lgs in con.sql(LEAGUES).fetchall()},
+                 [n for (n,) in con.sql(NAMES).fetchall()])
     con.close()
-    return out
+    return out, extra
+
+
+def mask(s, pools, csvs, leagues, real_names):
+    """Swap restricted players for placeholders in both CSVs (in place).
+    Returns {pool: {placeholder id: [real id, real name]}}."""
+    import csv
+    member = pti_pools.members(pools, leagues)
+    # A fresh key each run: placeholders change with every export, so they can't be followed across refreshes
+    ph = pti_pools.Placeholders(secrets.token_bytes(32), real_names)
+    s.pop('placeholderKey', None)  # stable placeholders used to keep one here
+    swap, lists = {}, {n: {} for n in pools}
+    path = csvs['ratings'][0]
+    with open(path, newline='', encoding='utf-8') as fh:
+        rows = list(csv.reader(fh))
+    head, rows = rows[0], rows[1:]
+    i_id, i_name = head.index('id'), head.index('name')
+    for r in sorted(rows, key=lambda r: r[i_id]):
+        mine = [n for n in pools if r[i_id] in member[n]]
+        if not mine:
+            continue
+        pid, pname = ph.make(r[i_id], pools[mine[0]].get('names', 'any'))
+        for n in mine:
+            lists[n][pid] = [r[i_id], r[i_name]]
+        swap[r[i_id]] = (pid, pname)
+    with open(path, 'w', newline='', encoding='utf-8') as fh:
+        w = csv.writer(fh, lineterminator='\n')
+        w.writerow(head)
+        for r in rows:
+            if r[i_id] in swap:
+                r[i_id], r[i_name] = swap[r[i_id]]
+        # Re-sort, or a placeholder row's place among the real ids would hint at its real id
+        w.writerows(sorted(rows, key=lambda r: r[i_id]))
+    path = csvs['matches'][0]
+    with open(path, newline='', encoding='utf-8') as src, open(path + '.tmp', 'w', newline='', encoding='utf-8') as dst:
+        rows, w = csv.reader(src), csv.writer(dst, lineterminator='\n')
+        head = next(rows)
+        cols = [head.index(c) for c in ('player1id', 'player2id', 'player3id', 'player4id')]
+        w.writerow(head)
+        for r in rows:
+            for c in cols:
+                if r[c] in swap:
+                    r[c] = swap[r[c]][0]
+            w.writerow(r)
+    os.replace(path + '.tmp', path)
+    return lists
+
+
+def reconcile(s, pools):
+    """Give every configured pool a key: new pools and pools marked for rotation get a
+    fresh one, pools no longer configured are dropped. True if any key changed."""
+    have, changed = s.setdefault('pools', {}), False
+    for n in [n for n in have if n not in pools]:
+        del have[n]
+        changed = True
+    for n in pools:
+        if n not in have or have[n].get('rotate'):
+            have[n] = {'key': pti_pools.b64(secrets.token_bytes(32))}
+            changed = True
+    return changed
 
 
 def seal(key, data):
@@ -170,7 +259,7 @@ def deployed(s3, bucket, folder, s, key):
         fail(f'could not read s3://{bucket}/{folder}/ ({e})')
     try:
         m = json.loads(unseal(key, blob))
-        return [m['ratings'], m['matches']]
+        return [m['ratings'], m['matches']] + list(m.get('pools', {}).values())
     except Exception:
         return False
 
@@ -196,6 +285,7 @@ def main():
     p.add_argument('--dry-run', action='store_true')
     p.add_argument('--keep-csv')
     p.add_argument('--database', default='md:')
+    p.add_argument('--pools')
     a = p.parse_args()
 
     out = a.out.strip()
@@ -214,12 +304,21 @@ def main():
     key = b64decode(s['dataKey'])
     if len(key) != 32 or not s.get('manifest'):
         fail(a.secret + " doesn't look like a pti-share secret file")
+    try:
+        pools = None if a.pools == 'none' else pti_pools.load_config(pti_pools.pools_path(a.secret, a.pools))
+    except ValueError as e:
+        fail(str(e))
+    if a.pools and a.pools != 'none' and not os.path.exists(a.pools):
+        fail(a.pools + ' not found')
 
-    # Key files can't be remade without the passwords, so they come from the folder pti_share.py wrote
+    # Key files of passwords from before restricted pools can't be remade without the
+    # password, so they come from the folder pti_share.py wrote. The rest are remade here.
     keys = {}
     if a.upload_keys or a.keys_only:
         lost = []
         for x in s.get('passwords', []):
+            if x.get('wrap'):
+                continue
             path = os.path.join(a.keys_from, DIR, x['file'])
             if os.path.exists(path):
                 with open(path, 'rb') as fh:
@@ -229,7 +328,7 @@ def main():
         if lost:
             fail(f'no key file in {os.path.join(a.keys_from, DIR)} for: {", ".join(lost)}. '
                  'Pass --keys-from with the --out folder pti_share.py used.')
-        if not keys:
+        if not s.get('passwords'):
             fail('the secret has no passwords yet. Run `python3 tools/pti_share.py add-password` first.')
     s3 = None if a.dry_run and not a.prune else s3_client()
 
@@ -240,15 +339,29 @@ def main():
     if a.prune and now is None and listed(s3, a.bucket, folder):
         fail(f'{where} has files but no manifest from {a.secret}, so --prune would not know what to keep. Nothing changed.')
 
-    blobs, names = {}, {}
+    blobs, names, pool_files, rekey = {}, {}, {}, False
     if not a.keys_only:
         with tempfile.TemporaryDirectory() as tmp:
             print('Exporting from ' + ('MotherDuck' if a.database.startswith('md:') else a.database) + ' ...', flush=True)
-            csvs = export(a, tmp)
+            csvs, extra = export(a, tmp, pools)
             nm, nr = csvs['matches'][1], csvs['ratings'][1]
             print(f'  matches.csv: {nm:,} matches\n  ratings.csv: {nr:,} players')
             if not nm or not nr:
                 fail('the export is empty; nothing uploaded')
+            if pools:
+                try:
+                    lists = mask(s, pools, csvs, *extra)
+                except RuntimeError as e:
+                    fail(str(e))
+                rekey = reconcile(s, pools)
+                for n, entries in lists.items():
+                    pool_files[n] = secrets.token_hex(16)
+                    body = json.dumps(entries, separators=(',', ':'), ensure_ascii=False).encode()
+                    blobs[pool_files[n]] = seal(b64decode(s['pools'][n]['key']), gzip.compress(body, compresslevel=9, mtime=0))
+                masked = len(set().union(*(set(e) for e in lists.values()))) if lists else 0
+                print(f'  masked {masked:,} players: ' + ', '.join(f'{n} {len(e):,}' for n, e in lists.items()))
+            elif s.get('pools'):
+                print('  no restricted pools in use: nobody is masked')
             if a.keep_csv:
                 os.makedirs(a.keep_csv, exist_ok=True)
                 for name, (path, _) in csvs.items():
@@ -261,16 +374,27 @@ def main():
                     raw = fh.read()
                 blobs[names[name]] = seal(key, gzip.compress(raw, compresslevel=9, mtime=0))
                 print(f'  encrypted {name}.csv: {len(raw):,} bytes -> {len(blobs[names[name]]):,}')
-            manifest = {'v': 1, 'ratings': names['ratings'], 'matches': names['matches'],
+            manifest = {'v': 2 if pool_files else 1, 'ratings': names['ratings'], 'matches': names['matches'],
                         'updated': dt.datetime.now(dt.timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z')}
+            if pool_files:
+                manifest['pools'] = pool_files
             blobs[s['manifest']] = seal(key, json.dumps(manifest, separators=(',', ':')).encode())
     elif now is None:
         print(f'Note: {where} has no data yet. Run without --keys-only to upload it.')
+    # New pool keys reach people through their key files, so those go out whenever a key changed
+    if a.upload_keys or a.keys_only or rekey:
+        for x in s.get('passwords', []):
+            if x.get('wrap'):
+                keys[x['file']] = seal(b64decode(x['wrap']), pti_pools.key_file(s, x))
+        if rekey and not (a.upload_keys or a.keys_only):
+            legacy = [x['label'] for x in s.get('passwords', []) if not x.get('wrap')]
+            if legacy:
+                print('  (pool keys changed; key files of passwords without pools stay as they are: ' + ', '.join(legacy) + ')')
     if keys:
-        print(f'  {len(keys)} key file(s) from {os.path.join(a.keys_from, DIR)}')
+        print(f'  {len(keys)} key file(s)')
 
     # Files the folder should hold afterwards; --prune deletes the rest
-    data = [names['ratings'], names['matches']] if names else (now or [])
+    data = [names['ratings'], names['matches']] + list(pool_files.values()) if names else (now or [])
     keep = set(data) | {s['manifest']} | {x['file'] for x in s.get('passwords', [])}
     stale = [f for f in listed(s3, a.bucket, folder) if f not in keep] if a.prune else []
 
@@ -288,7 +412,7 @@ def main():
     # Key files go last: they only point to the manifest.
     try:
         if names:
-            for name in (names['ratings'], names['matches'], s['manifest']):
+            for name in [names['ratings'], names['matches']] + list(pool_files.values()) + [s['manifest']]:
                 put(name, blobs[name])
         for name, body in keys.items():
             put(name, body)
@@ -300,8 +424,9 @@ def main():
     old = []
     if names:
         # Old data files: the ones this folder served, or the secret's last ones if it had none
-        old = [f for f in (now or [s.get('ratings'), s.get('matches')]) if f and f not in keep]
+        old = [f for f in (now or [s.get('ratings'), s.get('matches')] + s.get('poolFiles', [])) if f and f not in keep]
         s['ratings'], s['matches'] = names['ratings'], names['matches']
+        s['poolFiles'] = list(pool_files.values())
         tmp_secret = a.secret + '.tmp'
         with open(os.open(tmp_secret, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), 'w') as fh:
             json.dump(s, fh, indent=2)

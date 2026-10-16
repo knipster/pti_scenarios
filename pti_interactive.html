@@ -123,8 +123,16 @@
     tr.merged td { opacity: .6; }
     .badge { display: inline-block; font-size: .6875rem; font-weight: 600; padding: 0 .4rem; border-radius: 9999px; background: rgba(99,102,241,.12); color: #6366f1; white-space: nowrap; }
     html.dark .badge { background: rgba(129,140,248,.18); color: #a5b4fc; }
+    .pool-chip { display: inline-block; font-size: .6875rem; font-weight: 500; padding: .05rem .45rem; border-radius: 9999px; white-space: nowrap; border: 1px solid; cursor: default; }
+    .pool-chip.open { background: rgba(16,185,129,.12); color: #047857; border-color: rgba(16,185,129,.35); }
+    .pool-chip.shut { background: rgba(100,116,139,.12); color: #475569; border-color: rgba(100,116,139,.35); }
+    html.dark .pool-chip.open { background: rgba(52,211,153,.15); color: #6ee7b7; }
+    html.dark .pool-chip.shut { background: rgba(148,163,184,.15); color: #cbd5e1; }
     tr.excluded td.use { opacity: 1; }
     tr.excluded .teams, tr.excluded .score { text-decoration: line-through; }
+    .pl-link { color: inherit; text-decoration: underline dotted; text-underline-offset: 2px; cursor: pointer; }
+    .pl-link:hover, .pl-link:focus-visible { color: #6366f1; text-decoration-style: solid; }
+    html.dark .pl-link:hover, html.dark .pl-link:focus-visible { color: #a5b4fc; }
     .chip { display: inline-block; width: .7rem; height: .7rem; border-radius: 999px; vertical-align: middle; }
     .up { color: #e11d48; } .down { color: #059669; }
     html.dark .up { color: #fb7185; } html.dark .down { color: #34d399; }
@@ -134,6 +142,17 @@
     #chartWrap.grab { cursor: grab; } #chartWrap.grabbing { cursor: grabbing; } #chartWrap.add { cursor: crosshair; }
     .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 1rem; }
   </style>
+  <!-- Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-VJ88QLQFCL"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-VJ88QLQFCL');
+  </script>
+  <!-- GoatCounter -->
+  <script data-goatcounter="https://analytics.dlmk.org/count"
+          async src="//analytics.dlmk.org/count.js"></script>
 </head>
 <body class="min-h-screen antialiased">
 
@@ -147,6 +166,7 @@
           <h1 class="text-xl font-bold tracking-tight flex items-center gap-2">
             PTI History Explorer
             <span id="verBadge" class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 font-medium border border-indigo-500/30">v2.4</span>
+            <span id="poolChips" class="flex flex-wrap items-center gap-1"></span>
           </h1>
           <p class="text-xs muted">Replay match history • Drag starting ratings and breaks to see the effect</p>
         </div>
@@ -269,9 +289,10 @@
         <div class="max-h-[28rem] overflow-auto">
           <table class="data">
             <thead id="playersHead"><tr>
-              <th class="sortable" data-sort="show">Show</th><th class="sortable" data-sort="name">Player</th><th class="num sortable" data-sort="matches">Matches</th>
+              <th>Show</th><th class="sortable" data-sort="name">Player</th><th class="num sortable" data-sort="matches">Matches</th>
+              <th class="num sortable" data-sort="nowPti">Now PTI</th>
               <th class="num sortable" data-sort="startPti">Start PTI</th><th class="num sortable" data-sort="startSigma">Start sigma</th>
-              <th class="num sortable" data-sort="nowPti">Now PTI</th><th class="num sortable" data-sort="change">Change</th><th class="num sortable" data-sort="nowSigma">Now sigma</th>
+              <th class="num sortable" data-sort="change">Change</th><th class="num sortable" data-sort="nowSigma">Now sigma</th>
               <th class="num sortable" data-sort="deltaOrig" title="Now PTI minus the PTI in the history as loaded (see Show original)">Δ Original</th>
             </tr></thead>
             <tbody id="playersBody"></tbody>
@@ -317,7 +338,7 @@
       </div>
       <div class="max-h-[32rem] overflow-auto">
         <table class="data">
-          <thead id="matchesHead"><tr><th title="Untick to leave a match out of the calculation">Use</th><th>#</th><th class="sortable" data-msort="date">Date</th><th>Team 1</th><th>Team 2</th><th>Score</th><th>Shown players: start → end PTI (sigma)</th></tr></thead>
+          <thead id="matchesHead"><tr><th title="Untick to leave a match out of the calculation">Use</th><th class="sortable" data-msort="date">Date</th><th>Team 1</th><th>Team 2</th><th>Score</th><th>Shown players: start → end PTI (sigma)</th></tr></thead>
           <tbody id="matchesBody"></tbody>
         </table>
       </div>
@@ -367,7 +388,8 @@
     excluded: [],                 // match indexes left out of the calculation
     groups: {},                   // linked ids: root player index -> member indexes (root first)
     matchDir: -1,                 // matches table date order: -1 newest first, 1 oldest first
-    hiddenLines: new Set()        // chart lines hidden from the legend: 'p:<id>' a player, 'o:<id>' an original
+    hiddenLines: new Set(),       // chart lines hidden from the legend: 'p:<id>' a player, 'o:<id>' an original
+    focusId: null                 // ?player= id: the only player shown when data loads
   };
   var MAX_SHOWN = 8, MAX_TABLE_ROWS = 200, MAX_MATCH_ROWS = 300;
   // Categorical palette (fixed order), light and dark steps
@@ -381,7 +403,11 @@
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function isDark() { return document.documentElement.classList.contains('dark'); }
   function colorOf(i) { return PALETTE[isDark() ? 'dark' : 'light'][S.slot[i]]; }
-  function nameOf(i) { return i >= 0 && S.players[i] ? S.players[i].name : '?'; }
+  // Restricted players keep their placeholder id everywhere (views, links, downloads); a
+  // password that unlocks their pool only swaps in the real name for display.
+  function nameOf(i) { var p = i >= 0 && S.players[i]; return p ? p.name + (p.locked ? ' 🔒' : '') : '?'; }
+  var LOCK_TIP = 'Placeholder name: this player is in a restricted pool your password does not unlock';
+  function lockBadge(p) { return p.locked ? ' <span class="badge" title="' + LOCK_TIP + '">🔒</span>' : ''; }
   function nameOfId(id) { var i = S.eng && S.eng.index.get(String(id)); return i === undefined ? String(id) : nameOf(i); }
   function fmt(v, d) { return v == null || isNaN(v) ? '–' : (+v).toFixed(d == null ? 2 : d); }
   function num(n) { return n.toLocaleString('en-US'); }
@@ -473,7 +499,13 @@
       var pid = id[r], a = parseFloat(pti[r]), b = parseFloat(sigma[r]);
       if (!pid || isNaN(a) || isNaN(b) || seen.has(pid)) { bad++; continue; }
       seen.add(pid);
-      out.push({ id: pid, name: (name && name[r]) || pid, pti: a, sigma: b, lastPlayed: (last && last[r]) || null });
+      var row = { id: pid, name: (name && name[r]) || pid, pti: a, sigma: b, lastPlayed: (last && last[r]) || null };
+      if (/^x-/.test(pid)) {
+        var real = S.reveal && S.reveal[pid];
+        row.placeholder = row.name;
+        if (real) { row.realId = real[0]; row.name = real[1] || real[0]; } else row.locked = true;
+      }
+      out.push(row);
     }
     if (!out.length) throw new Error('No usable rows in the ratings CSV.');
     return { rows: out, bad: bad };
@@ -509,24 +541,25 @@
         S.orig = { pti: S.eng.endPti.slice(), sigma: S.eng.endSigma.slice(), init: S.eng.initPti.slice() };
         S.overrides = []; S.selected = []; S.slot = {}; S.sortOrder = null; S.xs = null; S.excluded = []; S.groups = {}; S.hiddenLines = new Set();
         S.ratingsText = S.matchesText = null;  // free the raw text
-        // Show the most active players first
-        var top = [];
-        for (var i = 0; i < S.eng.np; i++) {
-          top.push(i); top.sort(function (a, b) { return S.eng.count[b] - S.eng.count[a]; });
-          if (top.length > 5) top.pop();
-        }
-        top.forEach(function (i) { if (S.eng.count[i]) toggle(i, true); });
+        var locked = 0, unlocked = 0;
+        S.players.forEach(function (p) { if (p.locked) locked++; else if (p.realId) unlocked++; });
+        var pools = S.unlocked || []; S.reveal = S.unlocked = null;
+        renderPoolChips(S.poolInfo); S.poolInfo = null;
+        var shownNote = showDefault();
+        if (S.pendingView) shownNote = '';  // the shared view decides who is shown
         var unrated = 0; for (var k = 0; k < S.eng.n; k++) if (!S.eng.rated(k)) unrated++;
         setStatus(num(S.players.length) + ' players and ' + num(S.eng.n) + ' matches loaded in ' + secs(performance.now() - t0) +
           ' (reading ' + secs(t1 - t0) + ', indexing ' + secs(t2 - t1) + ', rating ' + secs(run.ms) + ')' +
-          (r.bad ? '. ' + num(r.bad) + ' rating rows skipped' : '') + (unrated ? '. ' + num(unrated) + ' matches could not be rated' : '') + '.', false);
+          (r.bad ? '. ' + num(r.bad) + ' rating rows skipped' : '') + (unrated ? '. ' + num(unrated) + ' matches could not be rated' : '') + '.' +
+          (unlocked ? ' Real names shown for ' + num(unlocked) + ' restricted players (' + pools.join(', ') + ').' : '') +
+          (locked ? ' ' + num(locked) + ' restricted players have placeholder names (🔒).' : '') + shownNote, false);
         setPerf(null);
         renderAll();
         setDataOpen(false);  // data is in: give the room to the chart
         // A shared view in the address waits for data, then applies to the first data set loaded
         if (S.pendingView) {
           var eng = S.eng, pending = S.pendingView; S.pendingView = null;
-          pending.then(function (v) { if (v && S.eng === eng) applyView(v); });
+          pending.then(function (v) { if (v && S.eng === eng) applyView(v, focusPlayer()); });
         }
       } catch (e) { setStatus(e.message, true); }
     }, 30);
@@ -877,17 +910,54 @@
     }
   }
 
+  // ---------- Players shown when data loads ----------
+  // ?player=id: just that player.
+  // Otherwise the 5 most active players of the data's last 90 days.
+  // Locked players are never picked for you.
+  var RECENT_DAYS = 90;
+  function focusPlayer() {
+    var id = S.focusId, e = S.eng;
+    if (!id || !e) return -1;
+    var i = e.index.get(id);
+    // An unlocked restricted player can be named by their real id too
+    if (i === undefined) for (var j = 0; j < S.players.length; j++) if (S.players[j].realId === id) { i = j; break; }
+    return i === undefined ? -1 : e.root[i];
+  }
+  function mostActiveRecently(n) {
+    var e = S.eng, last = -Infinity, k, recent = new Int32Array(e.np), out = [];
+    for (k = 0; k < e.n; k++) if (e.rated(k) && e.day[k] > last) last = e.day[k];
+    for (k = 0; k < e.n; k++) if (e.rated(k) && e.day[k] > last - RECENT_DAYS) for (var q = 0; q < 4; q++) recent[e.pl[4 * k + q]]++;
+    for (var i = 0; i < e.np; i++) if (e.count[i] && !S.players[i].locked) out.push(i);
+    return out.sort(function (a, b) { return recent[b] - recent[a] || e.count[b] - e.count[a] || a - b; }).slice(0, n);
+  }
+  // Shows the default players and returns a note for the status line
+  function showDefault() {
+    var f = focusPlayer();
+    if (f >= 0) {
+      toggle(f, true);
+      return '';
+    }
+    mostActiveRecently(5).forEach(function (i) { toggle(i, true); });
+    return S.focusId ? ' Player ' + S.focusId + ' is not in this data; showing the most active players of the last ' + RECENT_DAYS + ' days.'
+      : '';
+  }
+
   // Players table order: fixed when a header is clicked, so rows don't jump
   // while you tick boxes or drag; click the header again to re-sort.
+  // Shown players always come first, each part in the chosen column's order
   function sortedPlayers() {
+    var base = sortedByColumn(), shown = [], rest = [];
+    for (var j = 0; j < base.length; j++) (S.slot[base[j]] != null ? shown : rest).push(base[j]);
+    return shown.concat(rest);
+  }
+  function sortedByColumn() {
     var e = S.eng, key = S.sort.key, dir = S.sort.dir, n = S.players.length;
     if (S.sortOrder) return S.sortOrder;
     var order = new Array(n); for (var i = 0; i < n; i++) order[i] = i;
-    if (!key) return order;
+    if (!key) return (S.sortOrder = order);
     var val = new Float64Array(n), names = key === 'name' ? S.players.map(function (p) { return p.name.toLowerCase(); }) : null;
     for (i = 0; i < n; i++) {
       switch (key) {
-        case 'show': val[i] = S.selected.indexOf(i) >= 0 ? 0 : 1; break;
         case 'matches': val[i] = e.count[i]; break;
         case 'startPti': val[i] = e.initPti[i]; break;
         case 'startSigma': val[i] = e.initSigma[i]; break;
@@ -935,7 +1005,7 @@
     var order = sortedPlayers(), rows = [], matched = 0;
     for (var j = 0; j < order.length; j++) {
       var p = S.players[order[j]];
-      if (q && p.id.toLowerCase().indexOf(q) < 0 && p.name.toLowerCase().indexOf(q) < 0) continue;
+      if (q && p.id.toLowerCase().indexOf(q) < 0 && p.name.toLowerCase().indexOf(q) < 0 && !(p.realId && p.realId.toLowerCase().indexOf(q) >= 0)) continue;
       matched++;
       if (rows.length < MAX_TABLE_ROWS) rows.push(order[j]);
     }
@@ -947,11 +1017,11 @@
       var off = merged ? ' disabled title="Not used while linked to ' + esc(nameOf(r)) + '"' : '';
       return '<tr data-i="' + i + '"' + (merged ? ' class="merged"' : '') + '>' +
         '<td><input type="checkbox" class="show accent-indigo-600"' + (shown ? ' checked' : '') + (merged ? off : !shown && full ? ' disabled title="Up to 8 players at a time"' : '') + '></td>' +
-        '<td>' + (shown ? '<span class="chip" style="background:' + colorOf(i) + '"></span> ' : '') + esc(p.name) + (p.name !== p.id ? ' <span class="muted">' + esc(p.id) + '</span>' : '') + tag + '</td>' +
+        '<td>' + (shown ? '<span class="chip" style="background:' + colorOf(i) + '"></span> ' : '') + esc(p.name) + lockBadge(p) + (p.name !== p.id ? ' <span class="muted">' + esc(p.realId || p.id) + '</span>' : '') + tag + '</td>' +
         '<td class="num">' + num(e.count[i]) + '</td>' +
+        '<td class="num now-pti">' + (merged ? '–' : fmt(e.currentPti(i))) + '</td>' +
         '<td class="num"><input type="number" step="0.01" class="field field-sm start-pti" value="' + fmt(e.initPti[i]) + '"' + off + '></td>' +
         '<td class="num"><input type="number" step="0.01" min="0.01" class="field field-sm start-sigma" value="' + fmt(e.initSigma[i]) + '"' + off + '></td>' +
-        '<td class="num now-pti">' + (merged ? '–' : fmt(e.currentPti(i))) + '</td>' +
         '<td class="num now-ch ' + (merged ? '' : ch > 0.005 ? 'up' : ch < -0.005 ? 'down' : '') + '">' + (merged ? '–' : (ch >= 0 ? '+' : '') + fmt(ch)) + '</td>' +
         '<td class="num now-sigma">' + (merged ? '–' : fmt(e.currentSigma(i))) + '</td>' + deltaCell(i, merged) + '</tr>';
     }).join('') + (matched > rows.length
@@ -1006,6 +1076,18 @@
     });
   }
 
+  // A player in the matches table: a link that shows them on the chart. Players in a
+  // restricted pool the password doesn't unlock get no name and no link.
+  var RESTRICTED = '<span class="muted" title="Restricted player: your password does not unlock their pool">🔒 Restricted</span>';
+  function matchName(i) {
+    var p = S.players[i];
+    if (!p) return '?';
+    if (p.locked) return RESTRICTED;
+    var r = S.eng.root[i];  // a linked id shows its whole group
+    if (S.slot[r] != null) return '<span title="Shown on the chart">' + esc(nameOf(i)) + '</span>';
+    if (S.selected.length >= MAX_SHOWN) return '<span title="Up to ' + MAX_SHOWN + ' players at a time">' + esc(nameOf(i)) + '</span>';
+    return '<button type="button" class="pl-link" data-i="' + r + '" title="Show ' + esc(nameOf(r)) + ' on the chart">' + esc(nameOf(i)) + '</button>';
+  }
   function renderMatches() {
     var body = $('matchesBody'), e = S.eng;
     $('includeAllBtn').style.display = S.excluded.length ? '' : 'none';
@@ -1051,14 +1133,14 @@
         if (S.slot[i] == null) return '';
         var sp = e.startPti(pos), d = e.endPti[pos] - sp;
         return '<span class="whitespace-nowrap mr-3"><span class="chip" style="background:' + colorOf(i) + '"></span> ' +
-          esc(nameOf(i)) + ': ' + (e.hasOv[pos] ? '◆ ' : '') + fmt(sp) + ' → ' + fmt(e.endPti[pos]) +
+          (S.players[i].locked ? RESTRICTED : esc(nameOf(i))) + ': ' + (e.hasOv[pos] ? '◆ ' : '') + fmt(sp) + ' → ' + fmt(e.endPti[pos]) +
           ' <span class="' + (d > 0.005 ? 'up' : d < -0.005 ? 'down' : '') + '">(' + (d >= 0 ? '+' : '') + fmt(d) + ')</span>' +
           ' <span class="muted">σ ' + fmt(e.endSigma[pos]) + '</span></span>';
       }).join('');
       return '<tr data-k="' + k + '"' + (ex || clash ? ' class="excluded"' : '') + '>' +
         '<td class="use"><input type="checkbox" class="use-chk" aria-label="Use match #' + num(k + 1) + ' in the calculation"' + (ex ? '' : ' checked') + (clash && !ex ? ' disabled' : '') + '></td>' +
-        '<td class="muted">' + num(k + 1) + '</td><td class="whitespace-nowrap">' + esc(e.dates[k]) + '</td>' +
-        '<td class="teams">' + esc(nameOf(e.origPl[b])) + ' & ' + esc(nameOf(e.origPl[b + 1])) + '</td><td class="teams">' + esc(nameOf(e.origPl[b + 2])) + ' & ' + esc(nameOf(e.origPl[b + 3])) + '</td>' +
+        '<td class="whitespace-nowrap">' + esc(e.dates[k]) + '</td>' +
+        '<td class="teams">' + matchName(e.origPl[b]) + ' & ' + matchName(e.origPl[b + 1]) + '</td><td class="teams">' + matchName(e.origPl[b + 2]) + ' & ' + matchName(e.origPl[b + 3]) + '</td>' +
         '<td class="whitespace-nowrap score">' + esc(e.scores[k]) + '</td><td>' + cells + '</td></tr>';
     }).join('');
   }
@@ -1232,7 +1314,8 @@
       search: S.search, matchSearch: S.matchSearch
     };
   }
-  function applyView(v) {
+  // focus: a player (from ?player=) to show on top of the view's players
+  function applyView(v, focus) {
     var e = S.eng, skipped = 0, t = performance.now();
     function idx(id) { var i = e.index.get(String(id)); if (i === undefined) skipped++; return i; }
     function known(i) { return i !== undefined; }
@@ -1269,6 +1352,10 @@
     S.overrides.sort(function (a, b) { return a.k - b.k; });
     var show = [];
     (v.show || []).forEach(function (id) { var i = idx(id); if (known(i) && show.indexOf(e.root[i]) < 0) show.push(e.root[i]); });
+    if (focus >= 0) {
+      if (show.indexOf(focus) < 0) { if (show.length >= MAX_SHOWN) show.length = MAX_SHOWN - 1; show.push(focus); }
+      if (Array.isArray(v.hidden)) v.hidden = v.hidden.filter(function (key) { return key !== 'p:' + e.ids[focus]; });
+    }
     // Nobody from the link in this data: keep the players already shown, as their groups
     if (!show.length) S.selected.forEach(function (i) { if (show.indexOf(e.root[i]) < 0) show.push(e.root[i]); });
     S.selected = []; S.slot = {}; show.slice(0, MAX_SHOWN).forEach(function (i) { toggle(i, true); });
@@ -1379,7 +1466,7 @@
   }
   function downloadStarts() {
     var e = S.eng; if (!e) return;
-    var lines = S.players.map(function (p, i) { return [p.id, p.name, e.initPti[i], e.initSigma[i], p.lastPlayed || ''].map(csvCell).join(','); });
+    var lines = S.players.map(function (p, i) { return [p.id, p.placeholder || p.name, e.initPti[i], e.initSigma[i], p.lastPlayed || ''].map(csvCell).join(','); });
     download('pti-starting-ratings.csv', ['id,name,pti,sigma,lastPlayed\n' + lines.join('\n') + '\n']);
   }
 
@@ -1441,7 +1528,7 @@
   }
   var WRONG = "That password didn't work.";
   function openShared(pass) {
-    var C, dataKey;
+    var C, dataKey, poolKeys;
     pass = pass.normalize('NFKC').trim();
     return getShareCrypto().then(function (c) { C = c; return C.derive(pass); }).then(function (bits) {
       var keyName = hex(bits.subarray(0, 16)), wrap = bits.subarray(16);
@@ -1450,16 +1537,37 @@
       });
     }).then(function (plain) {
       var k = JSON.parse(new TextDecoder().decode(plain));
-      dataKey = Uint8Array.from(atob(k.key), function (ch) { return ch.charCodeAt(0); });
+      dataKey = bytes64(k.key); poolKeys = k.pools || {};
       shareMsg('Downloading…');
       return fetchBytes(k.m, 'The shared data is missing.').then(function (b) { return C.open(dataKey, b); });
     }).then(function (plain) {
       var m = JSON.parse(new TextDecoder().decode(plain));
-      return Promise.all([m.ratings, m.matches].map(function (n) {
+      var csvs = Promise.all([m.ratings, m.matches].map(function (n) {
         return fetchBytes(n, 'The shared data is missing.').then(function (b) { return C.open(dataKey, b); }).then(gunzipText);
       }));
+      // Real names of the restricted pools this password unlocks: { placeholder id: [real id, real name] }
+      var mine = Object.keys(m.pools || {}).filter(function (n) { return poolKeys[n]; });
+      var lists = Promise.all(mine.map(function (n) {
+        return fetchBytes(m.pools[n], '').then(function (b) { return C.open(bytes64(poolKeys[n]), b); }).then(gunzipText)
+          .then(JSON.parse).catch(function () { return null; });  // a pool that fails to open stays masked
+      }));
+      return Promise.all([csvs, lists]).then(function (r) {
+        var reveal = {}, opened = [], count = {};
+        r[1].forEach(function (l, j) { if (l) { opened.push(mine[j]); count[mine[j]] = Object.keys(l).length; for (var id in l) reveal[id] = l[id]; } });
+        var info = Object.keys(m.pools || {}).map(function (n) { return { name: n, open: n in count, count: count[n] || 0 }; });
+        return [r[0][0], r[0][1], reveal, opened, info];
+      });
     });
   }
+  // One chip per restricted pool in the shared data, next to the version badge: unlocked or locked
+  function renderPoolChips(info) {
+    $('poolChips').innerHTML = !info ? '' : info.map(function (p) {
+      var tip = p.open ? 'Restricted pool ' + p.name + ': unlocked, real names shown for ' + num(p.count) + ' players'
+        : 'Restricted pool ' + p.name + ': locked, its players have placeholder names';
+      return '<span class="pool-chip ' + (p.open ? 'open' : 'shut') + '" title="' + esc(tip) + '">' + (p.open ? '🔓 ' : '🔒 ') + esc(p.name) + '</span>';
+    }).join('');
+  }
+  function bytes64(s) { return Uint8Array.from(atob(s), function (ch) { return ch.charCodeAt(0); }); }
   function shareMsg(t, bad) { var el = $('shareMsg'); el.textContent = t; el.style.color = bad ? '#f43f5e' : ''; }
   function showShare() {
     var d = $('shareDlg');
@@ -1481,7 +1589,7 @@
       $('shareGo').disabled = true; shareMsg('Checking…');
       openShared(pass).then(function (t) {
         $('shareDlg').close();
-        S.ratingsText = t[0]; S.matchesText = t[1];
+        S.ratingsText = t[0]; S.matchesText = t[1]; S.reveal = t[2]; S.unlocked = t[3]; S.poolInfo = t[4];
         tryBuild();
       }).catch(function (err) {
         shareMsg(err && /^[A-Z]/.test(err.message) ? err.message : WRONG, true);
@@ -1617,6 +1725,10 @@
     function flipMatches() { S.matchDir = -S.matchDir; renderMatches(); }
     mth.addEventListener('click', flipMatches);
     mth.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flipMatches(); } });
+    $('matchesBody').addEventListener('click', function (e) {
+      var b = e.target.closest('.pl-link');
+      if (b) { toggle(+b.getAttribute('data-i'), true); renderAll(); }
+    });
     $('matchesBody').addEventListener('change', function (e) {
       var tr = e.target.closest('tr[data-k]');
       if (tr && e.target.classList.contains('use-chk')) setExcluded(+tr.getAttribute('data-k'), !e.target.checked);
@@ -1658,6 +1770,7 @@
     if (q.get('view') && typeof DecompressionStream === 'function' || /^j/.test(q.get('view') || '')) {
       S.pendingView = unpackView(q.get('view')).catch(function () { return null; });
     }
+    if (q.get('player')) S.focusId = q.get('player').trim();
     if (q.get('ratings')) $('ratingsUrl').value = q.get('ratings');
     if (q.get('matches')) $('matchesUrl').value = q.get('matches');
     if (q.get('ratings') && q.get('matches')) loadUrls(q.get('ratings'), q.get('matches'));
