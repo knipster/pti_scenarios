@@ -72,16 +72,18 @@ function readCsv(f, what) {
   return fs.readFileSync(f);
 }
 // Encrypt both CSVs under new names and (re)write the manifest that points to them
-function writeData(s, ratingsFile, matchesFile) {
+function writeData(s, ratingsFile, matchesFile, groupsFile) {
   const key = Buffer.from(s.dataKey, 'base64');
   const r = readCsv(ratingsFile, 'ratings'), m = readCsv(matchesFile, 'matches');
-  const old = [s.ratings, s.matches].filter(Boolean);
-  s.ratings = name(); s.matches = name();
+  const g = groupsFile ? readCsv(groupsFile, 'groups') : null;  // optional player groups
+  const old = [s.ratings, s.matches, s.groups].filter(Boolean);
+  s.ratings = name(); s.matches = name(); s.groups = g ? name() : null;
   write(s.ratings, seal(key, gzipSync(r, { level: 9 })));
   write(s.matches, seal(key, gzipSync(m, { level: 9 })));
+  if (g) write(s.groups, seal(key, gzipSync(g, { level: 9 })));
   // Old data files go from the local upload folder too (they still need deleting from the bucket)
   old.forEach(f => { try { fs.unlinkSync(path.join(OUT, DIR, f)); } catch (e) {} });
-  write(s.manifest, seal(key, Buffer.from(JSON.stringify({ v: 1, ratings: s.ratings, matches: s.matches, updated: new Date().toISOString() }))));
+  write(s.manifest, seal(key, Buffer.from(JSON.stringify({ v: 1, ratings: s.ratings, matches: s.matches, ...(g ? { groups: s.groups } : {}), updated: new Date().toISOString() }))));
   console.log(`Encrypted ${ratingsFile} (${r.length.toLocaleString()} bytes) and ${matchesFile} (${m.length.toLocaleString()} bytes).`);
   return old;
 }
@@ -99,7 +101,7 @@ switch (cmd) {
   case 'init': {
     if (fs.existsSync(SECRET) && !A.force) fail(SECRET + ' already exists. Use update to replace the data, or --force to start over.');
     const s = { v: 1, dataKey: randomBytes(32).toString('base64'), manifest: name(), ratings: null, matches: null, passwords: [] };
-    writeData(s, A.ratings, A.matches);
+    writeData(s, A.ratings, A.matches, A.groups);
     saveSecret(s);
     console.log(`\nSaved ${SECRET}. Keep it private: it can decrypt the data.\nNext: node tools/pti-share.mjs add-password --label <who>`);
     break;
@@ -107,7 +109,7 @@ switch (cmd) {
   case 'update': {
     const s = loadSecret();
     noPools(s, 'update');
-    const old = writeData(s, A.ratings, A.matches);
+    const old = writeData(s, A.ratings, A.matches, A.groups);
     saveSecret(s);
     console.log(`\nUpload the new files (existing passwords keep working):\n${UPLOAD}\n\nThen delete the old data files:\n${rm(old)}`);
     break;

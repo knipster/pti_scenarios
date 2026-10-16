@@ -56,7 +56,7 @@ Add `--out staging` to any `pti_share_sync.py` command to do the same for the co
 
 ## Refresh the data from MotherDuck
 
-`tools/pti_share_sync.py` does the whole update in one step. It runs the "PTI full export" queries against `apta2.main.matches_unified` in MotherDuck, encrypts the two CSVs with the data key in your `pti-share-secret.json`, and uploads them to the bucket's `d/` folder (or another site folder's, with `--out`). Existing passwords keep working, and the old data files are deleted from the bucket afterwards.
+`tools/pti_share_sync.py` does the whole update in one step. It runs the "PTI full export" queries against `apta2.main.matches_unified` in MotherDuck, encrypts the two CSVs with the data key in your `pti-share-secret.json`, and uploads them to the bucket's `d/` folder (or another site folder's, with `--out`). Existing passwords keep working, and the old data files are deleted from the bucket afterwards. [QUERIES.md](QUERIES.md) lists every query it runs and what each one produces.
 
 It needs Python 3.9 or newer and three packages:
 
@@ -100,6 +100,22 @@ python3 /path/to/pti_scenarios/tools/pti_share_sync.py --out staging --upload-ke
 ```
 
 When you add or remove a password, run the `--keys-only` command once for each folder, with and without `--out staging`. Refreshing one folder never touches the other's files.
+
+## Player groups (the Groups filter)
+
+Next to the CSVs, the shared data can carry a third, optional file, `groups.csv`, that says which groups each player belongs to. The explorer then shows a filter (funnel) button in the Players panel that limits the list to players in the groups you pick. A group is any set of players; `type` says what kind (`league`, `club`, `team`, `city`, `region`), so new kinds need no change to the page.
+
+```csv
+player,type,group,label
+1001,league,517,NJWPTL
+1001,club,ace,Ace Racquet Club
+```
+
+- `pti_share_sync.py` builds it from MotherDuck with one row per player and league they played in, over the whole table (not just the exported dates). The label is the league's `PSName` from the `leagues` table (joined on `PSLeagueID`), or the league id if it has none. Pass `--no-groups` to leave it out.
+- `pti_share.py` and `pti-share.mjs` take `--groups groups.csv` on `init` and `update`.
+- To keep it small, `pti_share_sync.py` writes each group's label on its first row only (the explorer takes it from whichever row has one) and lists rows sorted by group, which compresses well. The whole table gives about 110,000 player-league rows (87,000 players in 90 leagues): roughly 2 MB of CSV, and about half a megabyte once gzipped and encrypted.
+- The file is encrypted and listed in the manifest like the other two. Old shared data without it still opens; the filter button just doesn't appear.
+- Players in a restricted pool (below) get no group rows, so a placeholder is never tied to a league beyond what the pool says.
 
 ## Restricted player pools
 

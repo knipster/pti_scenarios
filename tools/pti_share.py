@@ -119,17 +119,21 @@ class Share:
     def write_data(self, s):
         key = base64.b64decode(s['dataKey'])
         r, m = self.read_csv(self.a.ratings, 'ratings'), self.read_csv(self.a.matches, 'matches')
-        old = [f for f in (s.get('ratings'), s.get('matches')) if f]
-        s['ratings'], s['matches'] = name(), name()
+        g = self.read_csv(self.a.groups, 'groups') if self.a.groups else None  # optional
+        old = [f for f in (s.get('ratings'), s.get('matches'), s.get('groups')) if f]
+        s['ratings'], s['matches'], s['groups'] = name(), name(), name() if g is not None else None
         self.write(s['ratings'], seal(key, gzip.compress(r, compresslevel=9, mtime=0)))
         self.write(s['matches'], seal(key, gzip.compress(m, compresslevel=9, mtime=0)))
+        if g is not None:
+            self.write(s['groups'], seal(key, gzip.compress(g, compresslevel=9, mtime=0)))
         # Old data files go from the local upload folder too (they still need deleting from the bucket)
         for f in old:
             try:
                 os.unlink(os.path.join(self.out, DIR, f))
             except OSError:
                 pass
-        self.write(s['manifest'], seal(key, js_json({'v': 1, 'ratings': s['ratings'], 'matches': s['matches'], 'updated': now()})))
+        self.write(s['manifest'], seal(key, js_json(dict({'v': 1, 'ratings': s['ratings'], 'matches': s['matches']},
+                                                                   **({'groups': s['groups']} if g is not None else {}), updated=now()))))
         print('Encrypted {} ({:,} bytes) and {} ({:,} bytes).'.format(self.a.ratings, len(r), self.a.matches, len(m)))
         return old
 
@@ -187,6 +191,7 @@ def main():
     p.add_argument('password', nargs='?')
     p.add_argument('--ratings')
     p.add_argument('--matches')
+    p.add_argument('--groups', help='optional CSV of player groups (player,type,group,label)')
     p.add_argument('--label')
     p.add_argument('--secret', default='pti-share-secret.json')
     p.add_argument('--out', default='share-out')
