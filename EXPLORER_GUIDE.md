@@ -119,6 +119,20 @@ Type in **Search players** to find players by name or id, and click or tap its �
 
 In the Change and Δ Original columns, green means the PTI went down (better) and red means it went up (worse).
 
+### Partners and opponents
+
+Switch the table from **Players** to **Partners** or **Opponents** to see who one player played with or against, and what those matches did to their PTI. The lists are for the player picked in **of**, which starts as the first player you put on the chart. Only players on the chart can be picked.
+
+| Column | Meaning |
+| --- | --- |
+| Show | Whether the partner or opponent is on the chart. Tick it to add them. |
+| Player | Name and id. |
+| Matches with / Matches against | Rated matches the two played together, or against each other. |
+| Cumulative PTI contribution | The sum of the picked player's PTI changes in those matches, with all your edits. |
+| Per match | Cumulative PTI contribution divided by the matches. |
+
+Lower PTI is better, so a green (negative) contribution means those matches brought the picked player's PTI down, and red means they pushed it up. The last row adds up all of the player's matches, which is their whole PTI change; in Opponents each match has two opponents, so the opponents' contributions add up to twice that. Players in a restricted pool your password doesn't unlock are listed as 🔒 Restricted, without a name or a Show box, as in the Matches table. **Search players** filters these lists too.
+
 ### Linking duplicate ids
 
 When one person has more than one player id, link the ids so their matches count as one history. Each group acts as one player: the id with the earliest match keeps its starting PTI and sigma, and the other ids continue from there.
@@ -148,7 +162,7 @@ A match where two linked ids of the same player meet is marked "Not rated: linke
 
 ## Sharing a view
 
-Click **Share** in the header to copy a link to what you're looking at. The link holds the shown players and which of their lines are hidden, linked ids, starting rating and sigma changes, breaks, excluded matches, the chart options, how the Players and Matches tables are sorted, and the text in both search boxes. It doesn't hold the data itself; if the page was opened with `?ratings=` and `?matches=` URLs, those stay in the link. Add `&player=` and an id to a shared link to open the shared view with that one player added to the chart.
+Click **Share** in the header to copy a link to what you're looking at. The link holds the shown players and which of their lines are hidden, linked ids, starting rating and sigma changes, breaks, excluded matches, the chart options, which players list is open (Players, Partners or Opponents) and for whom, how the tables are sorted, and the text in both search boxes. It doesn't hold the data itself; if the page was opened with `?ratings=` and `?matches=` URLs, those stay in the link. Add `&player=` and an id to a shared link to open the shared view with that one player added to the chart.
 
 When someone opens the link, the page waits until they load a data set, then applies the view to it. Anything the data doesn't have, such as a player id or a match that isn't in it, is skipped, and the status line says how many items were skipped. Matches are found by their date and four player ids, so a link still works on a later export of the same data.
 
