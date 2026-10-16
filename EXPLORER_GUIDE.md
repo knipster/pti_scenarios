@@ -6,9 +6,8 @@ The PTI History Explorer (`pti_interactive.html`) replays a set of doubles match
 
 Lower PTI is better. Everything runs in your browser and nothing is uploaded.
 
-The page has five parts, top to bottom:
+The **Data** column on the left is where you load the sample data or your own two CSV files. The button at the left end of the header opens and closes it. The rest of the page has four parts, top to bottom:
 
-- **Data**: load the sample data or your own two CSV files.
 - **Ratings over time**: the chart, with its controls and the predictive accuracy line.
 - **Players**: every player, with search, sorting and the columns for start, now and change.
 - **Breaks** and **Linked players**: the edits you've made, side by side with the players table on wide screens.
@@ -24,7 +23,7 @@ There are three ways to load each file:
 - Type a URL in the box underneath and click **Load URLs**.
 - Put both URLs in the page address: `pti_interactive.html?ratings=ratings.csv&matches=matches.csv`. A URL on another site only works if that site allows cross-origin requests.
 
-Once both files load, the status line reports how many players and matches were read and how long it took. It also says how many rating rows were skipped and how many matches couldn't be rated. The Data section then collapses to one summary line; click **Data** to open it again.
+Once both files load, the status line reports how many players and matches were read and how long it took. It also says how many rating rows were skipped and how many matches couldn't be rated. The Data column then collapses to a slim rail showing the number of players (PTI) and matches (MAT), written as 75k or 1.2M once they pass a thousand or a million. Hover over the rail for the full status line, and click it or the header button to open the column again. On a phone the column opens as a drawer over the page and has no rail; tap outside it or **Hide** to close it.
 
 ### CSV format
 
