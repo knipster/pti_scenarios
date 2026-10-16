@@ -134,6 +134,13 @@
     .pl-link:hover, .pl-link:focus-visible { color: #6366f1; text-decoration-style: solid; }
     html.dark .pl-link:hover, html.dark .pl-link:focus-visible { color: #a5b4fc; }
     .chip { display: inline-block; width: .7rem; height: .7rem; border-radius: 999px; vertical-align: middle; }
+    .chip.ring { box-shadow: inset 0 0 0 1.5px currentColor; opacity: .4; }
+    /* Player names in the Players, Partners and Opponents lists: click to show or hide on the chart */
+    .pl-name { background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+    .pl-name:hover .nm, .pl-name:focus-visible .nm { text-decoration: underline; text-underline-offset: 2px; }
+    .pl-name:hover .chip.ring, .pl-name:focus-visible .chip.ring { opacity: .8; }
+    .pl-name:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; border-radius: .25rem; }
+    .pl-name.off { cursor: default; }
     .up { color: #e11d48; } .down { color: #059669; }
     html.dark .up { color: #fb7185; } html.dark .down { color: #34d399; }
 
@@ -301,7 +308,7 @@
         <div class="max-h-[28rem] overflow-auto">
           <table class="data">
             <thead id="playersHead"><tr>
-              <th>Show</th><th class="sortable" data-sort="name">Player</th><th class="num sortable" data-sort="matches">Matches</th>
+              <th class="sortable" data-sort="name" title="Click a name to show or hide that player on the chart">Player</th><th class="num sortable" data-sort="matches">Matches</th>
               <th class="num sortable" data-sort="nowPti">Now PTI</th>
               <th class="num sortable" data-sort="startPti">Start PTI</th><th class="num sortable" data-sort="startSigma">Start sigma</th>
               <th class="num sortable" data-sort="change">Change</th><th class="num sortable" data-sort="nowSigma">Now sigma</th>
@@ -311,7 +318,7 @@
           </table>
           <table class="data" id="relTable" style="display:none">
             <thead id="relHead"><tr>
-              <th>Show</th><th class="sortable" data-rsort="name">Player</th><th class="num sortable" data-rsort="matches" id="relMatchesTh">Matches</th>
+              <th class="sortable" data-rsort="name" title="Click a name to show or hide that player on the chart">Player</th><th class="num sortable" data-rsort="matches" id="relMatchesTh">Matches</th>
               <th class="num sortable" data-rsort="contrib" id="relContribTh">Cumulative PTI contribution</th>
               <th class="num sortable" data-rsort="avg" title="Cumulative PTI contribution divided by the matches">Per match</th>
             </tr></thead>
@@ -1159,8 +1166,8 @@
         : g ? ' <span class="badge" title="' + esc(g.slice(1).map(nameOf).join(', ')) + '">+' + (g.length - 1) + ' linked</span>' : '';
       var off = merged ? ' disabled title="Not used while linked to ' + esc(nameOf(r)) + '"' : '';
       return '<tr data-i="' + i + '"' + (merged ? ' class="merged"' : '') + '>' +
-        '<td><input type="checkbox" class="show accent-indigo-600"' + (shown ? ' checked' : '') + (merged ? off : !shown && full ? ' disabled title="Up to 8 players at a time"' : '') + '></td>' +
-        '<td>' + (shown ? '<span class="chip" style="background:' + colorOf(i) + '"></span> ' : '') + esc(p.name) + lockBadge(p) + (p.name !== p.id ? ' <span class="muted">' + esc(p.realId || p.id) + '</span>' : '') + tag + '</td>' +
+        '<td>' + nameToggle(i, esc(p.name) + lockBadge(p) + (p.name !== p.id ? ' <span class="muted">' + esc(p.realId || p.id) + '</span>' : ''),
+          merged ? 'Not used while linked to ' + nameOf(r) : !shown && full ? 'Up to ' + MAX_SHOWN + ' players at a time' : null) + tag + '</td>' +
         '<td class="num">' + num(e.count[i]) + '</td>' +
         '<td class="num now-pti">' + (merged ? '–' : fmt(e.currentPti(i))) + '</td>' +
         '<td class="num"><input type="number" step="0.01" class="field field-sm start-pti" value="' + fmt(e.initPti[i]) + '"' + off + '></td>' +
@@ -1168,10 +1175,20 @@
         '<td class="num now-ch ' + (merged ? '' : ch > 0.005 ? 'up' : ch < -0.005 ? 'down' : '') + '">' + (merged ? '–' : (ch >= 0 ? '+' : '') + fmt(ch)) + '</td>' +
         '<td class="num now-sigma">' + (merged ? '–' : fmt(e.currentSigma(i))) + '</td>' + deltaCell(i, merged) + '</tr>';
     }).join('') + (matched > rows.length
-      ? '<tr><td colspan="9" class="muted text-center">Showing ' + num(rows.length) + ' of ' + num(matched) + ' players. Search or sort to find others.</td></tr>' : '');
+      ? '<tr><td colspan="8" class="muted text-center">Showing ' + num(rows.length) + ' of ' + num(matched) + ' players. Search or sort to find others.</td></tr>' : '');
     $('selCount').textContent = '(' + S.selected.length + ' of ' + MAX_SHOWN + ' shown)';
     $('clearShownBtn').disabled = !S.selected.length;
     $('linkShownBtn').disabled = S.selected.length < 2;
+  }
+  // A player's name in the Players, Partners and Opponents lists. Clicking it shows or hides
+  // them on the chart; the dot is their line colour while shown and an empty ring when not.
+  // why: the reason it can't be clicked right now, or null
+  function nameToggle(i, label, why) {
+    var shown = S.slot[i] != null;
+    var dot = shown ? '<span class="chip" style="background:' + colorOf(i) + '"></span> ' : '<span class="chip ring"></span> ';
+    if (why) return '<span class="pl-name off" title="' + esc(why) + '">' + dot + '<span class="nm">' + label + '</span></span>';
+    return '<button type="button" class="pl-name" data-i="' + i + '" aria-pressed="' + shown + '" title="' + (shown ? 'Hide from' : 'Show on') + ' the chart">' +
+      dot + '<span class="nm">' + label + '</span></button>';
   }
   function updatePlayerNumbers() {
     var e = S.eng;
@@ -1234,7 +1251,7 @@
     $('relMatchesTh').textContent = opp ? 'Matches against' : 'Matches with';
     $('relContribTh').title = 'Sum of ' + fname + "'s PTI changes in matches " + (opp ? 'against' : 'with') + ' this player. Lower PTI is better, so a negative total means these matches brought it down.';
     if (f < 0) {
-      body.innerHTML = '<tr><td colspan="5" class="muted text-center">Show a player on the chart to list their ' + (opp ? 'opponents' : 'partners') + '.</td></tr>';
+      body.innerHTML = '<tr><td colspan="4" class="muted text-center">Show a player on the chart to list their ' + (opp ? 'opponents' : 'partners') + '.</td></tr>';
       return;
     }
     var q = S.search.toLowerCase(), key = S.relSort.key, dir = S.relSort.dir;
@@ -1259,16 +1276,16 @@
     function signed(v) { return Math.abs(v) < 0.005 ? '<span>0.00</span>' : '<span class="' + (v > 0 ? 'up' : 'down') + '">' + (v > 0 ? '+' : '') + fmt(v) + '</span>'; }
     body.innerHTML = shownRows.map(function (r) {
       var p = S.players[r.i], shown = S.slot[r.i] != null, avg = r.sum / r.n;
-      var box = p.locked ? '' : '<input type="checkbox" class="show accent-indigo-600"' + (shown ? ' checked' : !full ? '' : ' disabled title="Up to 8 players at a time"') + '>';
-      var who = p.locked ? RESTRICTED : (shown ? '<span class="chip" style="background:' + colorOf(r.i) + '"></span> ' : '') + esc(p.name) +
-        (p.name !== p.id ? ' <span class="muted">' + esc(p.realId || p.id) + '</span>' : '');
-      return '<tr data-i="' + r.i + '"><td>' + box + '</td><td>' + who + '</td><td class="num">' + num(r.n) + '</td>' +
+      // A restricted player stays a plain "🔒 Restricted": no name and nothing to click
+      var who = p.locked ? RESTRICTED : nameToggle(r.i, esc(p.name) + (p.name !== p.id ? ' <span class="muted">' + esc(p.realId || p.id) + '</span>' : ''),
+        !shown && full ? 'Up to ' + MAX_SHOWN + ' players at a time' : null);
+      return '<tr data-i="' + r.i + '"><td>' + who + '</td><td class="num">' + num(r.n) + '</td>' +
         '<td class="num">' + signed(r.sum) + '</td><td class="num">' + signed(avg) + '</td></tr>';
     }).join('') +
-      (rows.length > shownRows.length ? '<tr><td colspan="5" class="muted text-center">Showing ' + num(shownRows.length) + ' of ' + num(rows.length) + '. Search or sort to find others.</td></tr>' : '') +
+      (rows.length > shownRows.length ? '<tr><td colspan="4" class="muted text-center">Showing ' + num(shownRows.length) + ' of ' + num(rows.length) + '. Search or sort to find others.</td></tr>' : '') +
       // Each match counts once here (it has two opponents), so this is f's whole PTI change over these matches
-      (rows.length ? (q ? '' : '<tr><td></td><td class="muted">All ' + num(e.positions(f).length) + ' matches</td><td></td><td class="num font-semibold">' + signed(all.total) + '</td><td></td></tr>')
-        : '<tr><td colspan="5" class="muted text-center">' + (q ? 'No match for this search.' : esc(fname) + ' has no rated matches.') + '</td></tr>');
+      (rows.length ? (q ? '' : '<tr><td class="muted">All ' + num(e.positions(f).length) + ' matches</td><td></td><td class="num font-semibold">' + signed(all.total) + '</td><td></td></tr>')
+        : '<tr><td colspan="4" class="muted text-center">' + (q ? 'No match for this search.' : esc(fname) + ' has no rated matches.') + '</td></tr>');
   }
 
   function renderBreaks() {
@@ -1864,6 +1881,14 @@
     small.addEventListener && small.addEventListener('change', function () { if (!small.matches) tuck(false); });
   }
 
+  // Click on a player's name in the Players, Partners or Opponents list
+  function toggleFromName(e) {
+    var b = e.target.closest('button.pl-name'); if (!b) return;
+    var i = +b.getAttribute('data-i');
+    toggle(i, S.slot[i] == null);
+    renderAll();
+  }
+
   function init() {
     wireDrop('ratings'); wireDrop('matches'); wireShare(); wireHeader();
     $('loadUrlsBtn').addEventListener('click', function () { loadUrls($('ratingsUrl').value.trim(), $('matchesUrl').value.trim()); });
@@ -1920,10 +1945,7 @@
       renderRel();
     });
     $('focusSel').addEventListener('change', function () { S.focus = +this.value; renderRel(); });
-    $('relBody').addEventListener('change', function (e) {
-      var tr = e.target.closest('tr[data-i]');
-      if (tr && e.target.classList.contains('show')) { toggle(+tr.getAttribute('data-i'), e.target.checked); renderAll(); }
-    });
+    $('relBody').addEventListener('click', toggleFromName);
     Array.prototype.forEach.call(document.querySelectorAll('#relHead th.sortable'), function (th) {
       th.tabIndex = 0;
       function sortBy() {
@@ -1973,10 +1995,7 @@
       th.addEventListener('click', sortBy);
       th.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sortBy(); } });
     });
-    $('playersBody').addEventListener('change', function (e) {
-      var tr = e.target.closest('tr[data-i]'); if (!tr) return;
-      if (e.target.classList.contains('show')) { toggle(+tr.getAttribute('data-i'), e.target.checked); renderAll(); }
-    });
+    $('playersBody').addEventListener('click', toggleFromName);
     $('playersBody').addEventListener('input', function (e) {
       var tr = e.target.closest('tr[data-i]'), v = parseFloat(e.target.value);
       if (!tr || isNaN(v)) return;
