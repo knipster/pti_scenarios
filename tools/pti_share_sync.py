@@ -164,7 +164,9 @@ def mask(s, pools, csvs, leagues, real_names):
     Returns {pool: {placeholder id: [real id, real name]}}."""
     import csv
     member = pti_pools.members(pools, leagues)
-    ph = pti_pools.Placeholders(pti_pools.placeholder_key(s), real_names)
+    # A fresh key each run: placeholders change with every export, so they can't be followed across refreshes
+    ph = pti_pools.Placeholders(secrets.token_bytes(32), real_names)
+    s.pop('placeholderKey', None)  # stable placeholders used to keep one here
     swap, lists = {}, {n: {} for n in pools}
     path = csvs['ratings'][0]
     with open(path, newline='', encoding='utf-8') as fh:
@@ -185,7 +187,8 @@ def mask(s, pools, csvs, leagues, real_names):
         for r in rows:
             if r[i_id] in swap:
                 r[i_id], r[i_name] = swap[r[i_id]]
-            w.writerow(r)
+        # Re-sort, or a placeholder row's place among the real ids would hint at its real id
+        w.writerows(sorted(rows, key=lambda r: r[i_id]))
     path = csvs['matches'][0]
     with open(path, newline='', encoding='utf-8') as src, open(path + '.tmp', 'w', newline='', encoding='utf-8') as dst:
         rows, w = csv.reader(src), csv.writer(dst, lineterminator='\n')
