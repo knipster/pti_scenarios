@@ -94,6 +94,12 @@ A break (◆) sets a player's PTI, sigma or both just before a chosen match, for
 
 A break on an excluded match stays in the list but does nothing until the match is included again.
 
+### Start spread
+
+To see how much a player's starting PTI matters, pick them in **Start spread** under the chart. The chart adds dashed lines in their colour, each replaying their history from a different starting PTI with the same starting sigma. **Lines** sets how many (2 to 6, 4 by default) and **Every** sets the PTI between them (5 by default), so 4 lines every 5 PTI start at −10, −5, +5 and +10 from the current start. The note beside the controls says how far apart the lines are at the start and after the last match, which shows how quickly they converge.
+
+Hover a spread line for its PTI after each match and how far it is from the player's own line. Click a spread line's start point (●) to make that the player's starting PTI; the spread then re-centres on it. The spread follows all your other edits, and goes into shared links.
+
 ### Undoing edits
 
 - **Reset starting ratings** puts every starting PTI and sigma back to the values in the file.
@@ -162,7 +168,7 @@ A match where two linked ids of the same player meet is marked "Not rated: linke
 
 ## Sharing a view
 
-Click **Share** in the header to copy a link to what you're looking at. The link holds the shown players and which of their lines are hidden, linked ids, starting rating and sigma changes, breaks, excluded matches, the chart options, which players list is open (Players, Partners or Opponents) and for whom, how the tables are sorted, and the text in both search boxes. It doesn't hold the data itself; if the page was opened with `?ratings=` and `?matches=` URLs, those stay in the link. Add `&player=` and an id to a shared link to open the shared view with that one player added to the chart.
+Click **Share** in the header to copy a link to what you're looking at. The link holds the shown players and which of their lines are hidden, linked ids, starting rating and sigma changes, the start spread, breaks, excluded matches, the chart options, which players list is open (Players, Partners or Opponents) and for whom, how the tables are sorted, and the text in both search boxes. It doesn't hold the data itself; if the page was opened with `?ratings=` and `?matches=` URLs, those stay in the link. Add `&player=` and an id to a shared link to open the shared view with that one player added to the chart.
 
 When someone opens the link, the page waits until they load a data set, then applies the view to it. Anything the data doesn't have, such as a player id or a match that isn't in it, is skipped, and the status line says how many items were skipped. Matches are found by their date and four player ids, so a link still works on a later export of the same data.
 
