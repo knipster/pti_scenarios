@@ -244,6 +244,22 @@ def mask(s, pools, csvs, leagues, real_names):
     return lists
 
 
+def compact_groups(path):
+    """Write each group's label on its first row only. The explorer takes the label from
+    whichever row has one, so this saves repeating a long name on every player's row."""
+    import csv
+    seen = set()
+    with open(path, newline='', encoding='utf-8') as src, open(path + '.tmp', 'w', newline='', encoding='utf-8') as dst:
+        rows, w = csv.reader(src), csv.writer(dst, lineterminator='\n')
+        w.writerow(next(rows))
+        for r in rows:
+            if (r[1], r[2]) in seen:
+                r[3] = ''
+            seen.add((r[1], r[2]))
+            w.writerow(r)
+    os.replace(path + '.tmp', path)
+
+
 def reconcile(s, pools):
     """Give every configured pool a key: new pools and pools marked for rotation get a
     fresh one, pools no longer configured are dropped. True if any key changed."""
@@ -405,6 +421,8 @@ def main():
                 print(f'  masked {masked:,} players: ' + ', '.join(f'{n} {len(e):,}' for n, e in lists.items()))
             elif s.get('pools'):
                 print('  no restricted pools in use: nobody is masked')
+            if 'groups' in csvs:
+                compact_groups(csvs['groups'][0])
             if a.keep_csv:
                 os.makedirs(a.keep_csv, exist_ok=True)
                 for name, (path, _) in csvs.items():

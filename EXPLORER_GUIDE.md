@@ -39,7 +39,7 @@ When shared data with restricted pools is open, the header shows a chip for each
 
 Data can include a third, optional file that says which groups players belong to (leagues, clubs, teams, cities or regions). When it is loaded, a filter (funnel) button appears in the Players panel. Click it, pick a group type if there is more than one, search for a group, and tick one or more. The table then lists only players in any of the ticked groups. The ticked groups show as chips next to the shown count; click the × on a chip to drop it, or **Clear** in the picker to drop all. Groups only filter the Players table, not the chart or the matches.
 
-Load the file in its own box in the Data column, by URL, or with `?groups=` in the page address. Shared data picks it up automatically. Format: `player, group` plus optional `type` (default `league`) and `label`. Players in a restricted pool have no groups.
+Load the file in its own box in the Data column, by URL, or with `?groups=` in the page address. Shared data picks it up automatically. Format: `player, group` plus optional `type` (default `league`) and `label` (it only needs to be on one row of the group). Players in a restricted pool have no groups.
 
 ### CSV format
 
