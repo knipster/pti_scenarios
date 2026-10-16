@@ -268,18 +268,18 @@
         <div class="flex gap-2 flex-wrap">
           <button id="resetStartsBtn" type="button" class="btn">Reset starting ratings</button>
           <button id="clearBreaksBtn" type="button" class="btn">Remove all breaks</button>
+          <button id="spreadBtn" type="button" class="btn" aria-pressed="false" disabled title="Draw extra lines for one shown player, each from a different starting PTI around their current one, to see how fast the lines come together. Click a line's start point to use that starting PTI.">Start spread</button>
+          <span id="spreadCtl" class="flex items-center gap-2 flex-wrap text-xs" style="display:none">
+            <select id="spreadSel" class="field" style="width:auto" aria-label="Player to draw a start spread for"></select>
+            <label class="flex items-center gap-1 muted" title="Number of extra lines (2 to 6)"><input id="spreadN" class="field field-sm" type="number" min="2" max="6" step="1" value="4" style="width:3.25rem"> lines</label>
+            <label class="flex items-center gap-1 muted" title="PTI between the starting points">every <input id="spreadStep" class="field field-sm" type="number" min="0.5" step="0.5" value="5" style="width:4rem"> PTI</label>
+          </span>
           <!-- Hidden for now; run showDownloads() in the browser console to show them -->
           <button id="downloadBtn" type="button" class="btn" style="display:none">Download results CSV</button>
           <button id="downloadStartsBtn" type="button" class="btn" style="display:none">Download starting ratings CSV</button>
           <span id="perf" class="text-xs muted self-center" role="status"></span>
         </div>
-        <div class="flex items-center gap-2 flex-wrap text-xs" title="Draw extra lines for one shown player, each from a different starting PTI around their current one, to see how fast the lines come together. Click a line's start point to use that starting PTI.">
-          <span class="label muted">Start spread</span>
-          <select id="spreadSel" class="field" style="width:auto" aria-label="Player to draw a start spread for"><option value="">Off</option></select>
-          <label class="flex items-center gap-1 muted">Lines <input id="spreadN" class="field field-sm" type="number" min="2" max="6" step="1" value="4" style="width:3.5rem"></label>
-          <label class="flex items-center gap-1 muted">Every <input id="spreadStep" class="field field-sm" type="number" min="0.5" step="0.5" value="5" style="width:4.25rem"> PTI</label>
-          <span id="spreadInfo" class="muted" role="status"></span>
-        </div>
+        <p id="spreadInfo" class="text-xs muted" role="status" style="display:none"></p>
       </div>
     </section>
 
@@ -793,17 +793,22 @@
   // How far apart the lines are at the start and after the last match
   function renderSpreadInfo(run) {
     var el = $('spreadInfo');
+    el.style.display = run && run.lines.length ? '' : 'none';
     if (!run || !run.lines.length) { el.textContent = ''; return; }
     var e = S.eng, last = run.list.length - 1, now = e.endPti[run.list[last]];
     var lo = Math.min(run.start, run.lines[0].start), hi = Math.max(run.start, run.lines[run.lines.length - 1].start);
     var elo = now, ehi = now;
     run.lines.forEach(function (ln) { elo = Math.min(elo, ln.pti[last]); ehi = Math.max(ehi, ln.pti[last]); });
-    el.textContent = 'Starts ' + fmt(lo, 1) + '–' + fmt(hi, 1) + ' (' + fmt(hi - lo, 1) + ' apart) end ' + fmt(elo) + '–' + fmt(ehi) +
+    el.textContent = 'Start spread: starts ' + fmt(lo, 1) + '–' + fmt(hi, 1) + ' (' + fmt(hi - lo, 1) + ' apart) end ' + fmt(elo) + '–' + fmt(ehi) +
       ' (' + fmt(ehi - elo) + ' apart) after ' + num(run.list.length) + ' matches';
   }
   function renderSpreadControls() {
-    var sel = $('spreadSel'), i = S.eng ? spreadPlayer() : -1;
-    sel.innerHTML = '<option value="">Off</option>' + S.selected.map(function (j) {
+    var sel = $('spreadSel'), i = S.eng ? spreadPlayer() : -1, btn = $('spreadBtn');
+    // Out of the way until it's turned on: just the button, and only the button while off
+    btn.classList.toggle('btn-primary', i >= 0); btn.setAttribute('aria-pressed', i >= 0 ? 'true' : 'false');
+    btn.disabled = !S.eng || !S.selected.length;
+    $('spreadCtl').style.display = i >= 0 ? '' : 'none';
+    sel.innerHTML = S.selected.map(function (j) {
       return '<option value="' + j + '"' + (j === i ? ' selected' : '') + '>' + esc(nameOf(j)) + '</option>';
     }).join('');
     $('spreadN').value = S.spread.n; $('spreadStep').value = S.spread.step;
@@ -1836,7 +1841,13 @@
     segment('metricSeg', 'metric'); segment('xSeg', 'xMode'); segment('modeSeg', 'mode'); segment('yScaleSeg', 'yScale');
     $('yScaleSeg').addEventListener('click', function () { $('ySpan').style.display = S.yScale === 'custom' ? '' : 'none'; });
     $('ySpan').addEventListener('input', function () { var v = +this.value; if (v > 0) { S.ySpan = v; refreshChart(); } });
-    $('spreadSel').addEventListener('change', function () { S.spread.i = this.value === '' ? null : +this.value; refreshChart(); });
+    $('spreadBtn').addEventListener('click', function () {
+      if (!S.eng) return;
+      // On: for the first shown player (pick another in the list); off: hide the lines and controls
+      S.spread.i = spreadPlayer() >= 0 ? null : S.selected.length ? S.selected[0] : null;
+      refreshChart(); renderSpreadControls();
+    });
+    $('spreadSel').addEventListener('change', function () { S.spread.i = +this.value; refreshChart(); });
     $('spreadN').addEventListener('input', function () { var v = Math.round(+this.value); if (v >= 2 && v <= 6) { S.spread.n = v; refreshChart(); } });
     $('spreadStep').addEventListener('input', function () { var v = +this.value; if (v > 0) { S.spread.step = v; refreshChart(); } });
     $('invertChk').addEventListener('change', function () { S.invert = this.checked; refreshChart(); });
