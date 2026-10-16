@@ -15,7 +15,7 @@ The **Data** column on the left is where you load the sample data or your own tw
 
 ## Loading data
 
-Click **Load sample data** to try the explorer with 10 fictional players and 90 matches. To use your own data, load two CSV files: starting ratings and matches.
+Click **Load sample data** to try the explorer with 10 fictional players and 90 matches. If you were given a password for shared data, click **Password** next to it and enter it there (see [tools/SHARING.md](tools/SHARING.md)). To use your own data, load two CSV files: starting ratings and matches.
 
 There are three ways to load each file:
 
