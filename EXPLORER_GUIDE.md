@@ -6,7 +6,7 @@ The PTI History Explorer (`pti_interactive.html`) replays a set of doubles match
 
 Lower PTI is better. Everything runs in your browser and nothing is uploaded.
 
-The **Data** column on the left is where you load the sample data or your own two CSV files. The button at the left end of the header opens and closes it. The rest of the page has four parts, top to bottom:
+The **Data** column on the left is where you load the sample data, shared data or your own two CSV files. The button at the left end of the header opens and closes it. The rest of the page has four parts, top to bottom:
 
 - **Ratings over time**: the chart, with its controls and the predictive accuracy line.
 - **Players**: every player, with search, sorting and the columns for start, now and change, plus **Partners** and **Opponents** lists for one player.
