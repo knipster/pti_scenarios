@@ -1022,22 +1022,12 @@
 
     // Helper to determine if a score string represents a Team 1 win
     function isTeam1Win(scoreStr) {
-      var rawSets = scoreStr.split(",");
       var t1Wins = 0;
       var t2Wins = 0;
 
-      rawSets.forEach(function(setStr) {
-        var cleanSet = setStr.trim();
-        if (!cleanSet) return;
-        var games = cleanSet.split("-");
-        if (games.length === 2) {
-          var t1score = parseInt(games[0].trim(), 10);
-          var t2score = parseInt(games[1].trim(), 10);
-          if (!isNaN(t1score) && !isNaN(t2score)) {
-            if (t1score > t2score) t1Wins++;
-            else if (t2score > t1score) t2Wins++;
-          }
-        }
+      parse_pti24_sets(scoreStr).forEach(function(set) {
+        if (set[0] === 0) t1Wins++;
+        else t2Wins++;
       });
 
       return t1Wins > t2Wins;
@@ -1053,33 +1043,7 @@
         updateIntermediate();
         return;
       }
-      var rawSets = score.split(",");
-      var parsedSets = [];
-
-      rawSets.forEach(function(setStr) {
-        var cleanSet = setStr.trim();
-        if (!cleanSet) return;
-
-        var games = cleanSet.split("-");
-        if (games.length === 2) {
-          var t1score = parseInt(games[0].trim(), 10);
-          var t2score = parseInt(games[1].trim(), 10);
-
-          if (!isNaN(t1score) && !isNaN(t2score)) {
-            var totalGames = t1score + t2score;
-            var gamepct = totalGames > 0 ? Math.max(t1score, t2score) / totalGames : 0.54;
-
-            if (totalGames <= 1) {
-              gamepct = 0.54;
-            }
-
-            var winner = (t1score > t2score) ? 0 : 1;
-            parsedSets.push([winner, gamepct]);
-          }
-        }
-      });
-
-      set_list = parsedSets;
+      set_list = parse_pti24_sets(score);
       updateIntermediate();
     }
 
@@ -1168,25 +1132,7 @@
 
     // Helper function to evaluate Player 1's post-match rating for any set score string
     function calculateP1PostForScore(scoreStr) {
-      var rawSets = scoreStr.split(",");
-      var parsedSets = [];
-
-      rawSets.forEach(function(setStr) {
-        var cleanSet = setStr.trim();
-        if (!cleanSet) return;
-        var games = cleanSet.split("-");
-        if (games.length === 2) {
-          var t1score = parseInt(games[0].trim(), 10);
-          var t2score = parseInt(games[1].trim(), 10);
-          if (!isNaN(t1score) && !isNaN(t2score)) {
-            var totalGames = t1score + t2score;
-            var gamepct = totalGames > 0 ? Math.max(t1score, t2score) / totalGames : 0.54;
-            if (totalGames <= 1) gamepct = 0.54;
-            var winner = (t1score > t2score) ? 0 : 1;
-            parsedSets.push([winner, gamepct]);
-          }
-        }
-      });
+      var parsedSets = parse_pti24_sets(scoreStr);
 
       if (!parsedSets.length || !players_list.length) {
         return parseFloat($('#ptiPlayer').val()) || 0.0;
