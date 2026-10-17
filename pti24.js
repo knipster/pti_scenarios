@@ -119,6 +119,41 @@ function speedrate_js(P1M, P1V, P2M, P2V, P3M, P3V, P4M, P4V, two_beta_squared =
 }
 
 
+// "6-4, 6-6(7-5), 1-0" -> set_list for update_pti24_ratings: [[winner, gamePct], ...]
+// (winner 0 = team 1, 1 = team 2; gamePct = set winner's share of games).
+// Sets count as APTA counts them (same rules as parseSets in pti24-engine.js):
+//   - a finished set (either side has 6+ games, games not tied): share of games;
+//   - games tied (6-6), or at most one game played with tiebreak points (a match
+//     tiebreak, 1-0(10-8) or 0-0(10-8)): 0.54 to the tiebreak winner;
+//   - 1-0 or 0-1 with no tiebreak points: 0.54 to the side with the game;
+//   - anything else unfinished (5-4, 2-0, 3-3(7-5)) doesn't count.
+// "(x-y)" is the tiebreak points from the same side as the games; a suffix
+// without a dash, as in "7-6(5)", is ignored.
+function parse_pti24_sets(score) {
+    var set_list = [];
+    String(score || '').split(',').forEach(function (s) {
+        var open = s.indexOf('('), x = 0, y = 0;
+        if (open >= 0) {
+            var t = s.slice(open + 1).replace(')', '').split('-');
+            if (t.length === 2) {
+                x = parseInt(t[0], 10); y = parseInt(t[1], 10);
+                if (isNaN(x) || isNaN(y)) x = y = 0;
+            }
+            s = s.slice(0, open);
+        }
+        var g = s.trim().split('-');
+        if (g.length !== 2) return;
+        var a = parseInt(g[0], 10), b = parseInt(g[1], 10);
+        if (isNaN(a) || isNaN(b) || a + b + x + y === 0) return;
+        if (a < 6 && b < 6) {
+            if (x + y === 0) { if (a + b === 1) set_list.push([a > b ? 0 : 1, 0.54]); }
+            else if (a + b <= 1 && x !== y) set_list.push([x > y ? 0 : 1, 0.54]);
+        } else if (a !== b) set_list.push([a > b ? 0 : 1, Math.max(a, b) / (a + b)]);
+        else if (x !== y) set_list.push([x > y ? 0 : 1, 0.54]);
+    });
+    return set_list;
+}
+
 function update_pti24_ratings(input_player_list, set_list) {
     if (!set_list || set_list.length === 0) {
         return structuredClone(input_player_list);
